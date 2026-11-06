@@ -14,11 +14,20 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
+  late AnimationController _animController;
+
   @override
   void initState() {
     super.initState();
+    _animController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))..repeat(reverse: true);
     WidgetsBinding.instance.addPostFrameCallback((_) => _checkUsername());
+  }
+
+  @override
+  void dispose() {
+    _animController.dispose();
+    super.dispose();
   }
 
   Future<void> _checkUsername() async {
@@ -49,7 +58,25 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         backgroundColor: Colors.black,
         elevation: 0,
-        title: const Text('Poker Night', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: AnimatedBuilder(
+          animation: _animController,
+          builder: (context, child) {
+            return Text(
+              'Poker Night',
+              style: TextStyle(
+                color: Colors.cyan,
+                fontWeight: FontWeight.bold,
+                fontSize: 22,
+                shadows: [
+                  Shadow(
+                    color: Colors.cyan.withOpacity(0.6 + _animController.value * 0.4),
+                    blurRadius: 12 + _animController.value * 8,
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.people_outline, color: Colors.cyan),
@@ -65,7 +92,7 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: Colors.cyan,
         onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateSessionScreen())),
         icon: const Icon(Icons.add, color: Colors.black),
-        label: const Text('Ny session', style: TextStyle(color: Colors.black)),
+        label: const Text('Ny session', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
       ),
       body: uid == null
           ? const Center(child: Text('Inte inloggad'))
@@ -92,8 +119,13 @@ class _HomeScreenState extends State<HomeScreen> {
                     Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF1A1A1A),
+                        gradient: LinearGradient(
+                          colors: [const Color(0xFF1A1A1A), Colors.cyan.withOpacity(0.08)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
                         borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.cyan.withOpacity(0.3)),
                       ),
                       child: const Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -113,6 +145,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         decoration: BoxDecoration(
                           color: const Color(0xFF1A1A1A),
                           borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.white12),
                         ),
                         child: const Column(
                           children: [
@@ -125,25 +158,57 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       )
                     else
-                      ...docs.map((doc) {
+                      ...docs.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final doc = entry.value;
                         final data = doc.data() as Map<String, dynamic>;
                         final start = (data['startTime'] as Timestamp?)?.toDate();
-                        return Card(
-                          color: const Color(0xFF1A1A1A),
-                          margin: const EdgeInsets.only(bottom: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          child: ListTile(
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                            leading: const CircleAvatar(backgroundColor: Colors.cyan, child: Icon(Icons.style, color: Colors.black)),
-                            title: Text(data['name'] ?? 'Session', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-                            subtitle: Text(
-                              '${data['address'] ?? ''} • ${data['type'] ?? ''}\n${start != null ? '${start.day}/${start.month} ${start.hour}:${start.minute.toString().padLeft(2, '0')}' : ''}',
-                              style: const TextStyle(color: Colors.white54),
+
+                        return TweenAnimationBuilder<double>(
+                          tween: Tween(begin: 0.0, end: 1.0),
+                          duration: Duration(milliseconds: 400 + index * 80),
+                          curve: Curves.easeOutCubic,
+                          builder: (context, value, child) {
+                            return Opacity(
+                              opacity: value,
+                              child: Transform.translate(
+                                offset: Offset(0, 20 * (1 - value)),
+                                child: child,
+                              ),
+                            );
+                          },
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1A1A1A),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: Colors.cyan.withOpacity(0.25)),
+                              boxShadow: [
+                                BoxShadow(color: Colors.cyan.withOpacity(0.08), blurRadius: 12, spreadRadius: 1),
+                              ],
                             ),
-                            trailing: const Icon(Icons.chevron_right, color: Colors.cyan),
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (_) => SessionDetailScreen(sessionId: doc.id, data: data)),
+                            child: ListTile(
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                              leading: Container(
+                                width: 48,
+                                height: 48,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  gradient: const RadialGradient(colors: [Color(0xFF00E5FF), Color(0xFF00838F)]),
+                                  boxShadow: [BoxShadow(color: Colors.cyan.withOpacity(0.4), blurRadius: 10)],
+                                ),
+                                child: const Icon(Icons.sports_esports, color: Colors.black, size: 26),
+                              ),
+                              title: Text(data['name'] ?? 'Session', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                              subtitle: Text(
+                                '${data['address'] ?? ''} • ${data['type'] ?? ''}\n${start != null ? '${start.day}/${start.month} ${start.hour}:${start.minute.toString().padLeft(2, '0')}' : ''}',
+                                style: const TextStyle(color: Colors.white54),
+                              ),
+                              trailing: const Icon(Icons.chevron_right, color: Colors.cyan),
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (_) => SessionDetailScreen(sessionId: doc.id, data: data)),
+                              ),
                             ),
                           ),
                         );
