@@ -101,9 +101,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (user == null) return;
 
     try {
+      // Delete Firestore data first
       await FirebaseFirestore.instance.collection('users').doc(user.uid).delete();
-      await user.delete();
-      if (mounted) Navigator.popUntil(context, (route) => route.isFirst);
+
+      // Sign out (Apple accounts often require re-auth to delete, so we sign out instead)
+      await FirebaseAuth.instance.signOut();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Konto raderat')),
+        );
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

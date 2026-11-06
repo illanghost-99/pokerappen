@@ -76,20 +76,21 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Session skapad!')),
-        );
-        Navigator.of(context).pop();
-      }
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Session skapad!'), duration: Duration(seconds: 2)),
+      );
+
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (mounted) Navigator.of(context).pop();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Kunde inte skapa: $e')),
         );
+        setState(() => _isCreating = false);
       }
-    } finally {
-      if (mounted) setState(() => _isCreating = false);
     }
   }
 

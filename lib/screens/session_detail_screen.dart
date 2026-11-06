@@ -17,7 +17,6 @@ class SessionDetailScreen extends StatefulWidget {
 class _SessionDetailScreenState extends State<SessionDetailScreen> {
   final _amountController = TextEditingController();
   String _type = 'buyin';
-  bool _deleted = false;
 
   Future<void> _addTransaction() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
@@ -57,37 +56,28 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
 
     if (confirm != true || !mounted) return;
 
-    setState(() => _deleted = true);
-
     try {
       await FirebaseFirestore.instance.collection('sessions').doc(widget.sessionId).delete();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Session raderad'), duration: Duration(seconds: 2)),
+      );
+
+      await Future.delayed(const Duration(milliseconds: 300));
+      if (mounted) Navigator.of(context).pop();
     } catch (e) {
       if (mounted) {
-        setState(() => _deleted = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Kunde inte radera: $e')),
         );
       }
-      return;
-    }
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Session raderad')),
-      );
-      Navigator.of(context).pop();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_deleted) {
-      return const Scaffold(
-        backgroundColor: Colors.black,
-        body: Center(child: CircularProgressIndicator(color: Colors.cyan)),
-      );
-    }
-
     final start = (widget.data['startTime'] as Timestamp?)?.toDate() ?? DateTime.now();
     final isAdmin = widget.data['ownerId'] == FirebaseAuth.instance.currentUser?.uid;
     final players = (widget.data['players'] as Map?)?.keys.toList() ?? [];
