@@ -18,22 +18,18 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   final _amountController = TextEditingController();
   String _type = 'buyin';
 
-  Future<void> _addTransaction() async {
+  void _addTransaction() {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
     final amount = double.tryParse(_amountController.text) ?? 0;
     if (amount <= 0) return;
 
-    await FirebaseFirestore.instance.collection('sessions').doc(widget.sessionId).update({
+    FirebaseFirestore.instance.collection('sessions').doc(widget.sessionId).update({
       'buyIns': FieldValue.arrayUnion([{'userId': uid, 'amount': amount, 'timestamp': DateTime.now().toIso8601String(), 'type': _type}]),
       'events': FieldValue.arrayUnion([{'type': _type, 'userId': uid, 'amount': amount, 'time': DateTime.now().toIso8601String()}]),
     });
     _amountController.clear();
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Inköp tillagt'), duration: Duration(seconds: 1)),
-      );
-    }
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Tillagt'), duration: Duration(seconds: 1)));
   }
 
   Future<void> _deleteSession() async {
@@ -42,7 +38,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
       builder: (c) => AlertDialog(
         backgroundColor: const Color(0xFF1A1A1A),
         title: const Text('Radera session?', style: TextStyle(color: Colors.white)),
-        content: const Text('Sessionen tas bort permanent och försvinner för alla.', style: TextStyle(color: Colors.white70)),
+        content: const Text('Sessionen tas bort permanent.', style: TextStyle(color: Colors.white70)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Avbryt')),
           ElevatedButton(
@@ -56,24 +52,12 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
 
     if (confirm != true || !mounted) return;
 
-    try {
-      await FirebaseFirestore.instance.collection('sessions').doc(widget.sessionId).delete();
+    // Delete in background
+    FirebaseFirestore.instance.collection('sessions').doc(widget.sessionId).delete();
 
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Session raderad'), duration: Duration(seconds: 2)),
-      );
-
-      await Future.delayed(const Duration(milliseconds: 300));
-      if (mounted) Navigator.of(context).pop();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Kunde inte radera: $e')),
-        );
-      }
-    }
+    // Navigate back immediately
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Raderad'), duration: Duration(seconds: 1)));
+    Navigator.pop(context);
   }
 
   @override

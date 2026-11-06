@@ -17,7 +17,6 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
   TimeOfDay _selectedTime = const TimeOfDay(hour: 19, minute: 0);
   String _currency = 'SEK';
   String _type = 'Cash Game';
-  bool _isCreating = false;
 
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
@@ -38,87 +37,43 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
     if (picked != null) setState(() => _selectedTime = picked);
   }
 
-  Future<void> _create() async {
-    if (_isCreating) return;
-
+  void _create() {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) {
-      await showDialog(context: context, builder: (c) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1A1A),
-        title: const Text('Fel', style: TextStyle(color: Colors.white)),
-        content: const Text('Du är inte inloggad', style: TextStyle(color: Colors.white70)),
-        actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('OK'))],
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Inte inloggad')));
       return;
     }
 
     if (_nameController.text.trim().isEmpty) {
-      await showDialog(context: context, builder: (c) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1A1A),
-        title: const Text('Fel', style: TextStyle(color: Colors.white)),
-        content: const Text('Ange ett namn på sessionen', style: TextStyle(color: Colors.white70)),
-        actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('OK'))],
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ange ett namn')));
       return;
     }
 
-    setState(() => _isCreating = true);
+    final start = DateTime(
+      _selectedDate.year,
+      _selectedDate.month,
+      _selectedDate.day,
+      _selectedTime.hour,
+      _selectedTime.minute,
+    );
 
-    try {
-      final start = DateTime(
-        _selectedDate.year,
-        _selectedDate.month,
-        _selectedDate.day,
-        _selectedTime.hour,
-        _selectedTime.minute,
-      );
+    // Create in background
+    FirebaseFirestore.instance.collection('sessions').add({
+      'name': _nameController.text.trim(),
+      'address': _addressController.text.trim(),
+      'currency': _currency,
+      'type': _type,
+      'startTime': Timestamp.fromDate(start),
+      'ownerId': uid,
+      'players': {uid: true},
+      'buyIns': [],
+      'events': [],
+      'createdAt': FieldValue.serverTimestamp(),
+    });
 
-      await FirebaseFirestore.instance.collection('sessions').add({
-        'name': _nameController.text.trim(),
-        'address': _addressController.text.trim(),
-        'currency': _currency,
-        'type': _type,
-        'startTime': Timestamp.fromDate(start),
-        'ownerId': uid,
-        'players': {uid: true},
-        'buyIns': [],
-        'events': [],
-        'createdAt': FieldValue.serverTimestamp(),
-      }).timeout(const Duration(seconds: 15));
-
-      if (!mounted) return;
-
-      await showDialog(
-        context: context,
-        builder: (c) => AlertDialog(
-          backgroundColor: const Color(0xFF1A1A1A),
-          title: const Row(
-            children: [
-              Icon(Icons.check_circle, color: Colors.green, size: 28),
-              SizedBox(width: 12),
-              Text('Skapad!', style: TextStyle(color: Colors.white)),
-            ],
-          ),
-          content: const Text('Sessionen har skapats.', style: TextStyle(color: Colors.white70)),
-          actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('OK', style: TextStyle(color: Colors.cyan)))],
-        ),
-      );
-
-      if (mounted) Navigator.of(context).pop();
-    } catch (e) {
-      if (mounted) {
-        await showDialog(
-          context: context,
-          builder: (c) => AlertDialog(
-            backgroundColor: const Color(0xFF1A1A1A),
-            title: const Text('Fel', style: TextStyle(color: Colors.white)),
-            content: Text('Kunde inte skapa: $e', style: const TextStyle(color: Colors.white70)),
-            actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('OK'))],
-          ),
-        );
-        setState(() => _isCreating = false);
-      }
-    }
+    // Navigate back immediately
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Session skapad'), duration: Duration(seconds: 1)));
+    Navigator.pop(context);
   }
 
   @override
@@ -212,14 +167,12 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: _isCreating ? null : _create,
+                onPressed: _create,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.cyan,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
-                child: _isCreating
-                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
-                    : const Text('Skapa session', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                child: const Text('Skapa session', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
               ),
             ),
           ],

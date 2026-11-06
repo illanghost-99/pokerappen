@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 
@@ -17,7 +16,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final _bioController = TextEditingController();
   bool _isPrivate = false;
   bool _loading = true;
-  bool _saving = false;
   String? _photoUrl;
   File? _newImage;
 
@@ -56,84 +54,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Future<String?> _uploadImage(String uid) async {
-    if (_newImage == null) return _photoUrl;
-    try {
-      final ref = FirebaseStorage.instance.ref().child('profile_images/$uid.jpg');
-      await ref.putFile(_newImage!);
-      return await ref.getDownloadURL();
-    } catch (e) {
-      debugPrint('Image upload error: $e');
-      return _photoUrl;
-    }
-  }
-
-  Future<void> _save() async {
+  void _save() {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
 
     final username = _nameController.text.trim();
     if (username.isEmpty) {
-      await showDialog(
-        context: context,
-        builder: (c) => AlertDialog(
-          backgroundColor: const Color(0xFF1A1A1A),
-          title: const Text('Fel', style: TextStyle(color: Colors.white)),
-          content: const Text('Användarnamn kan inte vara tomt', style: TextStyle(color: Colors.white70)),
-          actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('OK'))],
-        ),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ange användarnamn')));
       return;
     }
 
-    setState(() => _saving = true);
+    // Save in background
+    FirebaseFirestore.instance.collection('users').doc(uid).set({
+      'username': username,
+      'bio': _bioController.text.trim(),
+      'isPrivate': _isPrivate,
+    }, SetOptions(merge: true));
 
-    try {
-      final photoUrl = await _uploadImage(uid);
-
-      await FirebaseFirestore.instance.collection('users').doc(uid).set({
-        'username': username,
-        'bio': _bioController.text.trim(),
-        'isPrivate': _isPrivate,
-        'photoUrl': photoUrl,
-      }, SetOptions(merge: true));
-
-      if (mounted) {
-        setState(() {
-          _photoUrl = photoUrl;
-          _newImage = null;
-        });
-        await showDialog(
-          context: context,
-          builder: (c) => AlertDialog(
-            backgroundColor: const Color(0xFF1A1A1A),
-            title: const Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.green, size: 28),
-                SizedBox(width: 12),
-                Text('Sparad!', style: TextStyle(color: Colors.white)),
-              ],
-            ),
-            content: const Text('Din profil har sparats.', style: TextStyle(color: Colors.white70)),
-            actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('OK', style: TextStyle(color: Colors.cyan)))],
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        await showDialog(
-          context: context,
-          builder: (c) => AlertDialog(
-            backgroundColor: const Color(0xFF1A1A1A),
-            title: const Text('Fel', style: TextStyle(color: Colors.white)),
-            content: Text('Kunde inte spara: $e', style: const TextStyle(color: Colors.white70)),
-            actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('OK'))],
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
+    // Navigate back immediately
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sparad'), duration: Duration(seconds: 1)));
+    Navigator.pop(context);
   }
 
   Future<void> _deleteAccount() async {
@@ -142,13 +82,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
       builder: (c) => AlertDialog(
         backgroundColor: const Color(0xFF1A1A1A),
         title: const Text('Radera konto?', style: TextStyle(color: Colors.white)),
-        content: const Text('Detta tar bort ditt konto och all data. Det går inte att ångra.', style: TextStyle(color: Colors.white70)),
+        content: const Text('Detta tar bort ditt konto och all data.', style: TextStyle(color: Colors.white70)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Avbryt')),
           ElevatedButton(
             onPressed: () => Navigator.pop(c, true),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Radera konto'),
+            child: const Text('Radera'),
           ),
         ],
       ),
@@ -159,26 +99,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    try {
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).delete();
-      await FirebaseAuth.instance.signOut();
-
-      if (mounted) {
-        Navigator.of(context).popUntil((route) => route.isFirst);
-      }
-    } catch (e) {
-      if (mounted) {
-        await showDialog(
-          context: context,
-          builder: (c) => AlertDialog(
-            backgroundColor: const Color(0xFF1A1A1A),
-            title: const Text('Fel', style: TextStyle(color: Colors.white)),
-            content: Text('Kunde inte radera: $e', style: const TextStyle(color: Colors.white70)),
-            actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('OK'))],
-          ),
-        );
-      }
-    }
+    FirebaseFirestore.instance.collection('users').doc(user.uid).delete();
+    await FirebaseAuth.instance.signOut();
+    if (mounted) Navigator.popUntil(context, (route) => route.isFirst);
   }
 
   Future<void> _logout() async {
@@ -202,10 +125,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         title: const Text('Profil', style: TextStyle(color: Colors.white)),
         actions: [
           TextButton(
-            onPressed: _saving ? null : _save,
-            child: _saving
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.cyan))
-                : const Text('Spara', style: TextStyle(color: Colors.cyan, fontWeight: FontWeight.bold)),
+            onPressed: _save,
+            child: const Text('Spara', style: TextStyle(color: Colors.cyan, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
