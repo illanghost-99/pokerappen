@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../widgets/countdown_widget.dart';
+import '../widgets/poker_table_widget.dart';
 import 'summary_screen.dart';
 
 class SessionDetailScreen extends StatefulWidget {
@@ -23,25 +24,9 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     final amount = double.tryParse(_amountController.text) ?? 0;
     if (amount <= 0) return;
 
-    final sessionRef = FirebaseFirestore.instance.collection('sessions').doc(widget.sessionId);
-
-    await sessionRef.update({
-      'buyIns': FieldValue.arrayUnion([
-        {
-          'userId': uid,
-          'amount': amount,
-          'timestamp': DateTime.now().toIso8601String(),
-          'type': _type,
-        }
-      ]),
-      'events': FieldValue.arrayUnion([
-        {
-          'type': _type,
-          'userId': uid,
-          'amount': amount,
-          'time': DateTime.now().toIso8601String(),
-        }
-      ]),
+    await FirebaseFirestore.instance.collection('sessions').doc(widget.sessionId).update({
+      'buyIns': FieldValue.arrayUnion([{'userId': uid, 'amount': amount, 'timestamp': DateTime.now().toIso8601String(), 'type': _type}]),
+      'events': FieldValue.arrayUnion([{'type': _type, 'userId': uid, 'amount': amount, 'time': DateTime.now().toIso8601String()}]),
     });
     _amountController.clear();
   }
@@ -50,6 +35,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   Widget build(BuildContext context) {
     final start = (widget.data['startTime'] as Timestamp?)?.toDate() ?? DateTime.now();
     final isAdmin = widget.data['ownerId'] == FirebaseAuth.instance.currentUser?.uid;
+    final players = (widget.data['players'] as Map?)?.keys.toList() ?? [];
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -60,14 +46,11 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
           if (isAdmin)
             IconButton(
               icon: const Icon(Icons.summarize, color: Colors.cyan),
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => SummaryScreen(sessionId: widget.sessionId)),
-              ),
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => SummaryScreen(sessionId: widget.sessionId))),
             ),
         ],
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -77,27 +60,8 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
             Text('${widget.data['type'] ?? ''} • ${widget.data['currency'] ?? ''}', style: const TextStyle(color: Colors.cyan)),
             const SizedBox(height: 16),
             CountdownWidget(target: start),
-            const SizedBox(height: 24),
-            // Poker table visual
-            Container(
-              height: 160,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: [Color(0xFF0D4F0D), Color(0xFF1A6B1A)]),
-                borderRadius: BorderRadius.circular(80),
-                border: Border.all(color: Colors.amber, width: 3),
-                boxShadow: [BoxShadow(color: Colors.green.withOpacity(0.3), blurRadius: 20)],
-              ),
-              child: const Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text('♠ ♥', style: TextStyle(fontSize: 28, color: Colors.white)),
-                    Text('POKER TABLE', style: TextStyle(color: Colors.white70, fontSize: 12, letterSpacing: 2)),
-                    Text('♣ ♦', style: TextStyle(fontSize: 28, color: Colors.white)),
-                  ],
-                ),
-              ),
-            ),
+            const SizedBox(height: 16),
+            PokerTableWidget(playerCount: players.length, playerNames: players.cast<String>()),
             const SizedBox(height: 24),
             if (isAdmin) ...[
               const Text('Lägg till inköp / rebuy', style: TextStyle(fontSize: 16, color: Colors.white)),
@@ -140,32 +104,23 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
             ],
             const SizedBox(height: 16),
             const Text('Tidslinje', style: TextStyle(fontSize: 18, color: Colors.white)),
-            Expanded(
-              child: StreamBuilder<DocumentSnapshot>(
-                stream: FirebaseFirestore.instance.collection('sessions').doc(widget.sessionId).snapshots(),
-                builder: (context, snap) {
-                  if (!snap.hasData) return const Center(child: CircularProgressIndicator());
-                  final events = (snap.data!.data() as Map<String, dynamic>?)?['events'] as List? ?? [];
-                  if (events.isEmpty) {
-                    return const Center(child: Text('Inga händelser ännu', style: TextStyle(color: Colors.white38)));
-                  }
-                  return ListView.builder(
-                    itemCount: events.length,
-                    itemBuilder: (_, i) {
-                      final e = events[i] as Map;
-                      return ListTile(
-                        leading: Icon(
-                          e['type'] == 'rebuy' ? Icons.refresh : Icons.add_circle,
-                          color: Colors.cyan,
-                          size: 20,
-                        ),
-                        title: Text('${e['type']?.toString().toUpperCase()} – ${e['amount'] ?? ''}', style: const TextStyle(color: Colors.white)),
-                        subtitle: Text(e['time'] ?? '', style: const TextStyle(color: Colors.white38, fontSize: 12)),
-                      );
-                    },
-                  );
-                },
-              ),
+            StreamBuilder<DocumentSnapshot>(
+              stream: FirebaseFirestore.instance.collection('sessions').doc(widget.sessionId).snapshots(),
+              builder: (context, snap) {
+                if (!snap.hasData) return const SizedBox();
+                final events = (snap.data!.data() as Map<String, dynamic>?)?['events'] as List? ?? [];
+                if (events.isEmpty) return const Text('Inga händelser ännu', style: TextStyle(color: Colors.white38));
+                return Column(
+                  children: events.map<Widget>((e) {
+                    final m = e as Map;
+                    return ListTile(
+                      leading: Icon(m['type'] == 'rebuy' ? Icons.refresh : Icons.add_circle, color: Colors.cyan, size: 20),
+                      title: Text('${m['type']?.toString().toUpperCase()} – ${m['amount'] ?? ''}', style: const TextStyle(color: Colors.white)),
+                      subtitle: Text(m['time'] ?? '', style: const TextStyle(color: Colors.white38, fontSize: 12)),
+                    );
+                  }).toList(),
+                );
+              },
             ),
           ],
         ),
