@@ -15,10 +15,48 @@ class SessionDetailScreen extends StatefulWidget {
 }
 
 class _SessionDetailScreenState extends State<SessionDetailScreen> {
+  List<String> _playerNames = [];
+  List<String?> _playerPhotoUrls = [];
+
   bool get _hasStarted {
     final start = (widget.data['startTime'] as Timestamp?)?.toDate();
     if (start == null) return true;
     return DateTime.now().isAfter(start);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPlayerDetails();
+  }
+
+  Future<void> _loadPlayerDetails() async {
+    final playerIds = (widget.data['players'] as Map?)?.keys.toList() ?? [];
+    final names = <String>[];
+    final photos = <String?>[];
+
+    for (final id in playerIds) {
+      try {
+        final doc = await FirebaseFirestore.instance.collection('users').doc(id).get();
+        if (doc.exists) {
+          names.add(doc.data()?['username'] ?? id);
+          photos.add(doc.data()?['photoUrl']);
+        } else {
+          names.add(id);
+          photos.add(null);
+        }
+      } catch (_) {
+        names.add(id);
+        photos.add(null);
+      }
+    }
+
+    if (mounted) {
+      setState(() {
+        _playerNames = names;
+        _playerPhotoUrls = photos;
+      });
+    }
   }
 
   Future<void> _addBuyInForPlayer(String playerId, String playerName) async {
@@ -46,7 +84,6 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Header with close button
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -184,8 +221,6 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   Widget build(BuildContext context) {
     final start = (widget.data['startTime'] as Timestamp?)?.toDate() ?? DateTime.now();
     final isAdmin = widget.data['ownerId'] == FirebaseAuth.instance.currentUser?.uid;
-    final players = (widget.data['players'] as Map?)?.keys.toList() ?? [];
-    final playerNames = players.cast<String>();
     final started = _hasStarted;
 
     return Scaffold(
@@ -227,8 +262,9 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                   children: [
                     Center(
                       child: PokerTableWidget(
-                        playerCount: players.length,
-                        playerNames: playerNames,
+                        playerCount: _playerNames.length,
+                        playerNames: _playerNames,
+                        playerPhotoUrls: _playerPhotoUrls,
                         isAdmin: isAdmin && started,
                         onPlayerTap: _addBuyInForPlayer,
                       ),
