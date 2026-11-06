@@ -1,17 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'firebase_options.dart';
-import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
-import 'services/auth_service.dart';
+import 'screens/home_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(const PokerNightApp());
 }
 
@@ -20,50 +17,30 @@ class PokerNightApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => AuthService()),
-      ],
-      child: MaterialApp(
-        title: 'Poker Night',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData.dark().copyWith(
-          colorScheme: const ColorScheme.dark(
-            primary: Colors.cyan,
-            secondary: Colors.cyanAccent,
-            surface: Color(0xFF1A1A1A),
-          ),
-          scaffoldBackgroundColor: Colors.black,
-          appBarTheme: const AppBarTheme(
-            backgroundColor: Colors.black,
-            elevation: 0,
-          ),
-        ),
-        home: const AuthWrapper(),
+    return MaterialApp(
+      title: 'Poker Night',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData.dark().copyWith(
+        scaffoldBackgroundColor: Colors.black,
+        colorScheme: const ColorScheme.dark(primary: Colors.cyan),
       ),
-    );
-  }
-}
-
-class AuthWrapper extends StatelessWidget {
-  const AuthWrapper({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.authStateChanges(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            backgroundColor: Colors.black,
-            body: Center(child: CircularProgressIndicator(color: Colors.cyan)),
-          );
-        }
-        if (snapshot.hasData) {
-          return const HomeScreen();
-        }
-        return const LoginScreen();
-      },
+      locale: const Locale('sv', 'SE'),
+      supportedLocales: const [Locale('sv', 'SE'), Locale('en', 'US')],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      home: StreamBuilder<User?>(
+        stream: FirebaseAuth.instance.authStateChanges(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Scaffold(body: Center(child: CircularProgressIndicator(color: Colors.cyan)));
+          }
+          if (snapshot.hasData) return const HomeScreen();
+          return const LoginScreen();
+        },
+      ),
     );
   }
 }
