@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -11,8 +13,11 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   final _nameController = TextEditingController();
+  final _bioController = TextEditingController();
   bool _isPrivate = false;
   bool _loading = true;
+  String? _photoUrl;
+  File? _newImage;
 
   @override
   void initState() {
@@ -21,25 +26,53 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _load() async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
-    final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
-    if (doc.exists) {
-      final data = doc.data()!;
-      _nameController.text = data['username'] ?? '';
-      _isPrivate = data['isPrivate'] ?? false;
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) {
+        setState(() => _loading = false);
+        return;
+      }
+      final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      if (doc.exists) {
+        final data = doc.data()!;
+        _nameController.text = data['username'] ?? '';
+        _bioController.text = data['bio'] ?? '';
+        _isPrivate = data['isPrivate'] ?? false;
+        _photoUrl = data['photoUrl'];
+      }
+    } catch (e) {
+      debugPrint('Profile load error: $e');
     }
-    setState(() => _loading = false);
+    if (mounted) setState(() => _loading = false);
+  }
+
+  Future<void> _pickImage() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
+    if (picked != null) {
+      setState(() => _newImage = File(picked.path));
+    }
   }
 
   Future<void> _save() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
-    await FirebaseFirestore.instance.collection('users').doc(uid).update({
+
+    final data = {
       'username': _nameController.text.trim(),
+      'bio': _bioController.text.trim(),
       'isPrivate': _isPrivate,
-    });
-    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profil sparad')));
+    };
+
+    // TODO: Upload image to Firebase Storage if _newImage != null
+    // For now just save the profile data
+    await FirebaseFirestore.instance.collection('users').doc(uid).set(data, SetOptions(merge: true));
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Profil sparad'), duration: Duration(seconds: 1)),
+      );
+    }
   }
 
   Future<void> _logout() async {
@@ -49,57 +82,108 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_loading) {
+      return const Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(child: CircularProgressIndicator(color: Colors.cyan)),
+      );
+    }
+
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: Colors.black,
         title: const Text('Profil', style: TextStyle(color: Colors.white)),
+        actions: [
+          TextButton(
+            onPressed: _save,
+            child: const Text('Spara', style: TextStyle(color: Colors.cyan, fontWeight: FontWeight.bold)),
+          ),
+        ],
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator(color: Colors.cyan))
-          : Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          children: [
+            GestureDetector(
+              onTap: _pickImage,
+              child: Stack(
                 children: [
-                  const CircleAvatar(radius: 50, backgroundColor: Colors.cyan, child: Icon(Icons.person, size: 50, color: Colors.black)),
-                  const SizedBox(height: 8),
-                  TextButton(onPressed: () {}, child: const Text('Lägg till profilbild')),
-                  const SizedBox(height: 24),
-                  TextField(
-                    controller: _nameController,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: const InputDecoration(
-                      labelText: 'Användarnamn',
-                      labelStyle: TextStyle(color: Colors.white54),
-                      filled: true,
-                      fillColor: Color(0xFF1A1A1A),
+                  CircleAvatar(
+                    radius: 55,
+                    backgroundColor: Colors.cyan,
+                    backgroundImage: _newImage != null
+                        ? FileImage(_newImage!)
+                        : (_photoUrl != null ? NetworkImage(_photoUrl!) : null) as ImageProvider?,
+                    child: _newImage == null && _photoUrl == null
+                        ? const Icon(Icons.person, size: 50, color: Colors.black)
+                        : null,
+                  ),
+                  Positioned(
+                    bottom: 0,
+                    right: 0,
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: const BoxDecoration(color: Colors.cyan, shape: BoxShape.circle),
+                      child: const Icon(Icons.camera_alt, size: 18, color: Colors.black),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  SwitchListTile(
-                    title: const Text('Privat konto', style: TextStyle(color: Colors.white)),
-                    subtitle: const Text('Endast vänner kan se dig', style: TextStyle(color: Colors.white54)),
-                    value: _isPrivate,
-                    activeColor: Colors.cyan,
-                    onChanged: (v) => setState(() => _isPrivate = v),
-                  ),
-                  const Spacer(),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _save,
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.cyan, padding: const EdgeInsets.symmetric(vertical: 16)),
-                      child: const Text('Spara', style: TextStyle(color: Colors.black)),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextButton(
-                    onPressed: _logout,
-                    child: const Text('Logga ut', style: TextStyle(color: Colors.red)),
                   ),
                 ],
               ),
             ),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: _pickImage,
+              child: const Text('Byt profilbild', style: TextStyle(color: Colors.cyan)),
+            ),
+            const SizedBox(height: 24),
+            TextField(
+              controller: _nameController,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: 'Användarnamn',
+                labelStyle: TextStyle(color: Colors.white54),
+                filled: true,
+                fillColor: Color(0xFF1A1A1A),
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _bioController,
+              style: const TextStyle(color: Colors.white),
+              maxLines: 3,
+              decoration: const InputDecoration(
+                labelText: 'Om mig',
+                labelStyle: TextStyle(color: Colors.white54),
+                filled: true,
+                fillColor: Color(0xFF1A1A1A),
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+            SwitchListTile(
+              title: const Text('Privat konto', style: TextStyle(color: Colors.white)),
+              subtitle: const Text('Endast vänner kan se dig', style: TextStyle(color: Colors.white54)),
+              value: _isPrivate,
+              activeColor: Colors.cyan,
+              onChanged: (v) => setState(() => _isPrivate = v),
+            ),
+            const SizedBox(height: 32),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: _logout,
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Colors.red),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+                child: const Text('Logga ut', style: TextStyle(color: Colors.red)),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
