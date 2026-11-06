@@ -43,12 +43,22 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
 
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Du är inte inloggad')));
+      await showDialog(context: context, builder: (c) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A1A),
+        title: const Text('Fel', style: TextStyle(color: Colors.white)),
+        content: const Text('Du är inte inloggad', style: TextStyle(color: Colors.white70)),
+        actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('OK'))],
+      ));
       return;
     }
 
     if (_nameController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ange ett namn på sessionen')));
+      await showDialog(context: context, builder: (c) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A1A),
+        title: const Text('Fel', style: TextStyle(color: Colors.white)),
+        content: const Text('Ange ett namn på sessionen', style: TextStyle(color: Colors.white70)),
+        actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('OK'))],
+      ));
       return;
     }
 
@@ -74,24 +84,37 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
         'buyIns': [],
         'events': [],
         'createdAt': FieldValue.serverTimestamp(),
-      }).timeout(const Duration(seconds: 10));
+      }).timeout(const Duration(seconds: 15));
 
       if (!mounted) return;
 
-      // Show success and go back
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Session skapad!'),
-          backgroundColor: Colors.green,
-          duration: Duration(seconds: 2),
+      await showDialog(
+        context: context,
+        builder: (c) => AlertDialog(
+          backgroundColor: const Color(0xFF1A1A1A),
+          title: const Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.green, size: 28),
+              SizedBox(width: 12),
+              Text('Skapad!', style: TextStyle(color: Colors.white)),
+            ],
+          ),
+          content: const Text('Sessionen har skapats.', style: TextStyle(color: Colors.white70)),
+          actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('OK', style: TextStyle(color: Colors.cyan)))],
         ),
       );
 
-      Navigator.of(context).pop();
+      if (mounted) Navigator.of(context).pop();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Fel: $e'), backgroundColor: Colors.red),
+        await showDialog(
+          context: context,
+          builder: (c) => AlertDialog(
+            backgroundColor: const Color(0xFF1A1A1A),
+            title: const Text('Fel', style: TextStyle(color: Colors.white)),
+            content: Text('Kunde inte skapa: $e', style: const TextStyle(color: Colors.white70)),
+            actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('OK'))],
+          ),
         );
         setState(() => _isCreating = false);
       }

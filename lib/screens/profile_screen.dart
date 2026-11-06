@@ -74,8 +74,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     final username = _nameController.text.trim();
     if (username.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Användarnamn kan inte vara tomt'), backgroundColor: Colors.red),
+      await showDialog(
+        context: context,
+        builder: (c) => AlertDialog(
+          backgroundColor: const Color(0xFF1A1A1A),
+          title: const Text('Fel', style: TextStyle(color: Colors.white)),
+          content: const Text('Användarnamn kan inte vara tomt', style: TextStyle(color: Colors.white70)),
+          actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('OK'))],
+        ),
       );
       return;
     }
@@ -83,7 +89,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() => _saving = true);
 
     try {
-      // Upload image if selected
       final photoUrl = await _uploadImage(uid);
 
       await FirebaseFirestore.instance.collection('users').doc(uid).set({
@@ -98,24 +103,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _photoUrl = photoUrl;
           _newImage = null;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Row(
+        await showDialog(
+          context: context,
+          builder: (c) => AlertDialog(
+            backgroundColor: const Color(0xFF1A1A1A),
+            title: const Row(
               children: [
-                Icon(Icons.check_circle, color: Colors.white),
+                Icon(Icons.check_circle, color: Colors.green, size: 28),
                 SizedBox(width: 12),
-                Text('Profil sparad'),
+                Text('Sparad!', style: TextStyle(color: Colors.white)),
               ],
             ),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
+            content: const Text('Din profil har sparats.', style: TextStyle(color: Colors.white70)),
+            actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('OK', style: TextStyle(color: Colors.cyan)))],
           ),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Kunde inte spara: $e'), backgroundColor: Colors.red),
+        await showDialog(
+          context: context,
+          builder: (c) => AlertDialog(
+            backgroundColor: const Color(0xFF1A1A1A),
+            title: const Text('Fel', style: TextStyle(color: Colors.white)),
+            content: Text('Kunde inte spara: $e', style: const TextStyle(color: Colors.white70)),
+            actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('OK'))],
+          ),
         );
       }
     } finally {
@@ -151,15 +164,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
       await FirebaseAuth.instance.signOut();
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Konto raderat')),
-        );
         Navigator.of(context).popUntil((route) => route.isFirst);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Kunde inte radera: $e')),
+        await showDialog(
+          context: context,
+          builder: (c) => AlertDialog(
+            backgroundColor: const Color(0xFF1A1A1A),
+            title: const Text('Fel', style: TextStyle(color: Colors.white)),
+            content: Text('Kunde inte radera: $e', style: const TextStyle(color: Colors.white70)),
+            actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('OK'))],
+          ),
         );
       }
     }
