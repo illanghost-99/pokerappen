@@ -58,24 +58,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<String?> _uploadImage(String uid) async {
     if (_newImage == null) return _photoUrl;
+
     try {
-      debugPrint('Starting image upload for uid: $uid');
-      final ref = FirebaseStorage.instance.ref().child('profile_images/$uid.jpg');
-      final uploadTask = ref.putFile(_newImage!);
-      final snapshot = await uploadTask;
-      debugPrint('Upload complete, getting download URL');
-      final url = await snapshot.ref.getDownloadURL();
-      debugPrint('Download URL: $url');
+      final fileName = '${uid}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final ref = FirebaseStorage.instance.ref().child('profile_images/$fileName');
+
+      final uploadTask = await ref.putFile(_newImage!);
+      final url = await uploadTask.ref.getDownloadURL();
       return url;
-    } catch (e, stack) {
-      debugPrint('Image upload FAILED: $e');
-      debugPrint('Stack: $stack');
+    } catch (e) {
+      debugPrint('Upload error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Bilduppladdning misslyckades: $e'),
             backgroundColor: Colors.red,
-            duration: const Duration(seconds: 5),
+            duration: const Duration(seconds: 4),
           ),
         );
       }
@@ -99,16 +97,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() => _saving = true);
 
     try {
-      debugPrint('Saving profile...');
-      final photoUrl = await _uploadImage(uid);
+      String? photoUrl = _photoUrl;
 
-      if (_newImage != null && photoUrl == null) {
-        // Upload failed, stop here
-        if (mounted) setState(() => _saving = false);
-        return;
+      if (_newImage != null) {
+        photoUrl = await _uploadImage(uid);
+        if (photoUrl == null) {
+          if (mounted) setState(() => _saving = false);
+          return;
+        }
       }
 
-      debugPrint('Writing to Firestore...');
       await FirebaseFirestore.instance.collection('users').doc(uid).set({
         'username': username,
         'bio': _bioController.text.trim(),
@@ -116,28 +114,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
         'photoUrl': photoUrl,
       }, SetOptions(merge: true));
 
-      debugPrint('Firestore write successful');
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Row(children: [Icon(Icons.check_circle, color: Colors.white), SizedBox(width: 10), Text('Profil sparad')]),
+            content: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 10),
+                Text('Profil sparad'),
+              ],
+            ),
             backgroundColor: Colors.green,
             duration: Duration(seconds: 2),
           ),
         );
         Navigator.pop(context);
       }
-    } catch (e, stack) {
-      debugPrint('Save FAILED: $e');
-      debugPrint('Stack: $stack');
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Kunde inte spara: $e'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 5),
-          ),
+          SnackBar(content: Text('Kunde inte spara: $e'), backgroundColor: Colors.red),
         );
       }
     } finally {
