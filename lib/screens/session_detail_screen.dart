@@ -29,60 +29,86 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
 
     final result = await showModalBottomSheet<bool>(
       context: context,
-      backgroundColor: const Color(0xFF1A1A1A),
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (c) {
         return StatefulBuilder(
           builder: (context, setModalState) {
+            final bottomInset = MediaQuery.of(context).viewInsets.bottom;
             return Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('Lägg till för $playerName', style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 20),
-                  TextField(
-                    controller: amountController,
-                    keyboardType: TextInputType.number,
-                    style: const TextStyle(color: Colors.white, fontSize: 24),
-                    textAlign: TextAlign.center,
-                    decoration: const InputDecoration(
-                      hintText: 'Belopp',
-                      hintStyle: TextStyle(color: Colors.white38),
-                      filled: true,
-                      fillColor: Color(0xFF2A2A2A),
-                      border: OutlineInputBorder(),
+              padding: EdgeInsets.only(bottom: bottomInset),
+              child: Container(
+                decoration: const BoxDecoration(
+                  color: Color(0xFF1A1A1A),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                ),
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Header with close button
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const SizedBox(width: 40),
+                        Text('Lägg till för $playerName', style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                        IconButton(
+                          icon: const Icon(Icons.close, color: Colors.white54),
+                          onPressed: () => Navigator.pop(c, false),
+                        ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      ChoiceChip(
-                        label: const Text('Buy-in'),
-                        selected: type == 'buyin',
-                        onSelected: (_) => setModalState(() => type = 'buyin'),
-                        selectedColor: Colors.cyan,
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: amountController,
+                      keyboardType: TextInputType.number,
+                      autofocus: true,
+                      style: const TextStyle(color: Colors.white, fontSize: 28),
+                      textAlign: TextAlign.center,
+                      decoration: const InputDecoration(
+                        hintText: 'Belopp',
+                        hintStyle: TextStyle(color: Colors.white38),
+                        filled: true,
+                        fillColor: Color(0xFF2A2A2A),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
                       ),
-                      const SizedBox(width: 12),
-                      ChoiceChip(
-                        label: const Text('Rebuy'),
-                        selected: type == 'rebuy',
-                        onSelected: (_) => setModalState(() => type = 'rebuy'),
-                        selectedColor: Colors.cyan,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.pop(c, true),
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.cyan, padding: const EdgeInsets.symmetric(vertical: 16)),
-                      child: const Text('Lägg till', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        ChoiceChip(
+                          label: const Text('Buy-in'),
+                          selected: type == 'buyin',
+                          onSelected: (_) => setModalState(() => type = 'buyin'),
+                          selectedColor: Colors.cyan,
+                          labelStyle: TextStyle(color: type == 'buyin' ? Colors.black : Colors.white),
+                        ),
+                        const SizedBox(width: 12),
+                        ChoiceChip(
+                          label: const Text('Rebuy'),
+                          selected: type == 'rebuy',
+                          onSelected: (_) => setModalState(() => type = 'rebuy'),
+                          selectedColor: Colors.cyan,
+                          labelStyle: TextStyle(color: type == 'rebuy' ? Colors.black : Colors.white),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pop(c, true),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.cyan,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: const Text('Lägg till', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16)),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             );
           },
@@ -190,18 +216,15 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
             Text('${widget.data['type'] ?? ''} • ${widget.data['currency'] ?? ''}', style: const TextStyle(color: Colors.cyan)),
             const SizedBox(height: 16),
 
-            // Countdown always visible
             CountdownWidget(target: start),
             const SizedBox(height: 24),
 
-            // Locked section
             Opacity(
               opacity: started ? 1.0 : 0.35,
               child: IgnorePointer(
                 ignoring: !started,
                 child: Column(
                   children: [
-                    // Poker table with tappable players
                     Center(
                       child: PokerTableWidget(
                         playerCount: players.length,
@@ -212,7 +235,6 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                     ),
                     const SizedBox(height: 24),
 
-                    // History under the table
                     const Align(
                       alignment: Alignment.centerLeft,
                       child: Text('Historik', style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.w600)),
