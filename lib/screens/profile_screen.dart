@@ -16,6 +16,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final _bioController = TextEditingController();
   bool _isPrivate = false;
   bool _loading = true;
+  bool _saving = false;
   String? _photoUrl;
   File? _newImage;
 
@@ -64,16 +65,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return;
     }
 
-    await FirebaseFirestore.instance.collection('users').doc(uid).set({
-      'username': username,
-      'bio': _bioController.text.trim(),
-      'isPrivate': _isPrivate,
-    }, SetOptions(merge: true));
+    setState(() => _saving = true);
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Profil sparad'), duration: Duration(seconds: 1)),
-      );
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(uid).set({
+        'username': username,
+        'bio': _bioController.text.trim(),
+        'isPrivate': _isPrivate,
+      }, SetOptions(merge: true));
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 12),
+                Text('Profil sparad'),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Kunde inte spara: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -101,10 +124,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (user == null) return;
 
     try {
-      // Delete Firestore data first
       await FirebaseFirestore.instance.collection('users').doc(user.uid).delete();
-
-      // Sign out (Apple accounts often require re-auth to delete, so we sign out instead)
       await FirebaseAuth.instance.signOut();
 
       if (mounted) {
@@ -143,8 +163,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         title: const Text('Profil', style: TextStyle(color: Colors.white)),
         actions: [
           TextButton(
-            onPressed: _save,
-            child: const Text('Spara', style: TextStyle(color: Colors.cyan, fontWeight: FontWeight.bold)),
+            onPressed: _saving ? null : _save,
+            child: _saving
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.cyan))
+                : const Text('Spara', style: TextStyle(color: Colors.cyan, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
