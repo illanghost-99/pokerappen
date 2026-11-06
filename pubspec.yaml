@@ -21,6 +21,7 @@ dependencies:
   provider: ^6.1.2
   image_picker: ^1.1.2
   supabase_flutter: ^2.8.0
+  crypto: ^3.0.3
 
 dev_dependencies:
   flutter_test:
