@@ -4,7 +4,16 @@ import 'dart:math' as math;
 class PokerTableWidget extends StatelessWidget {
   final int playerCount;
   final List<String> playerNames;
-  const PokerTableWidget({super.key, required this.playerCount, this.playerNames = const []});
+  final bool isAdmin;
+  final Function(String playerId, String playerName)? onPlayerTap;
+
+  const PokerTableWidget({
+    super.key,
+    required this.playerCount,
+    this.playerNames = const [],
+    this.isAdmin = false,
+    this.onPlayerTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -29,22 +38,43 @@ class PokerTableWidget extends StatelessWidget {
             final angle = (i / count) * 2 * math.pi - math.pi / 2;
             final x = 110 * math.cos(angle);
             final y = 70 * math.sin(angle);
+            final name = i < playerNames.length ? playerNames[i] : 'Spelare ${i + 1}';
+            final playerId = i < playerNames.length ? playerNames[i] : 'player_$i';
+
             return Positioned(
-              left: 130 + x - 24,
-              top: 140 + y - 24,
-              child: Column(
-                children: [
-                  CircleAvatar(
-                    radius: 22,
-                    backgroundColor: Colors.cyan.shade800,
-                    child: Text('${i + 1}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  ),
-                  if (i < playerNames.length)
-                    Text(
-                      playerNames[i].length > 8 ? '${playerNames[i].substring(0, 6)}..' : playerNames[i],
-                      style: const TextStyle(color: Colors.white70, fontSize: 10),
+              left: 130 + x - 28,
+              top: 140 + y - 28,
+              child: GestureDetector(
+                onTap: isAdmin && onPlayerTap != null ? () => onPlayerTap!(playerId, name) : null,
+                child: Column(
+                  children: [
+                    Stack(
+                      children: [
+                        CircleAvatar(
+                          radius: 26,
+                          backgroundColor: Colors.cyan.shade800,
+                          child: Text('${i + 1}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                        ),
+                        if (isAdmin)
+                          Positioned(
+                            right: 0,
+                            bottom: 0,
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: const BoxDecoration(color: Colors.cyan, shape: BoxShape.circle),
+                              child: const Icon(Icons.add, size: 14, color: Colors.black),
+                            ),
+                          ),
+                      ],
                     ),
-                ],
+                    const SizedBox(height: 4),
+                    Text(
+                      name.length > 8 ? '${name.substring(0, 6)}..' : name,
+                      style: const TextStyle(color: Colors.white70, fontSize: 11),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
               ),
             );
           }),
