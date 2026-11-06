@@ -25,12 +25,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   }
 
   void _addTransaction() {
-    if (!_hasStarted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Sessionen har inte börjat ännu')),
-      );
-      return;
-    }
+    if (!_hasStarted) return;
 
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
@@ -117,137 +112,130 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
           ],
         ],
       ),
-      body: Stack(
-        children: [
-          SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(widget.data['address'] ?? '', style: const TextStyle(fontSize: 16, color: Colors.white70)),
-                const SizedBox(height: 8),
-                Text('${widget.data['type'] ?? ''} • ${widget.data['currency'] ?? ''}', style: const TextStyle(color: Colors.cyan)),
-                const SizedBox(height: 16),
-                CountdownWidget(target: start),
-                const SizedBox(height: 24),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Always visible info
+            Text(widget.data['address'] ?? '', style: const TextStyle(fontSize: 16, color: Colors.white70)),
+            const SizedBox(height: 8),
+            Text('${widget.data['type'] ?? ''} • ${widget.data['currency'] ?? ''}', style: const TextStyle(color: Colors.cyan)),
+            const SizedBox(height: 16),
 
-                // Centered poker table
-                Center(
-                  child: PokerTableWidget(
-                    playerCount: players.length,
-                    playerNames: players.cast<String>(),
-                  ),
-                ),
+            // Countdown is ALWAYS unlocked and visible
+            CountdownWidget(target: start),
+            const SizedBox(height: 24),
 
-                const SizedBox(height: 24),
-
-                // Buy-in section (only interactive when started)
-                Opacity(
-                  opacity: started ? 1.0 : 0.4,
-                  child: IgnorePointer(
-                    ignoring: !started,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Lägg till inköp / rebuy', style: TextStyle(fontSize: 16, color: Colors.white)),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                controller: _amountController,
-                                keyboardType: TextInputType.number,
-                                style: const TextStyle(color: Colors.white),
-                                decoration: InputDecoration(
-                                  hintText: 'Belopp',
-                                  hintStyle: const TextStyle(color: Colors.white38),
-                                  filled: true,
-                                  fillColor: const Color(0xFF1A1A1A),
-                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            DropdownButton<String>(
-                              value: _type,
-                              dropdownColor: const Color(0xFF1A1A1A),
-                              style: const TextStyle(color: Colors.white),
-                              items: const [
-                                DropdownMenuItem(value: 'buyin', child: Text('Buy-in')),
-                                DropdownMenuItem(value: 'rebuy', child: Text('Rebuy')),
-                              ],
-                              onChanged: (v) => setState(() => _type = v!),
-                            ),
-                            const SizedBox(width: 8),
-                            ElevatedButton(
-                              onPressed: _addTransaction,
-                              style: ElevatedButton.styleFrom(backgroundColor: Colors.cyan),
-                              child: const Text('Lägg till', style: TextStyle(color: Colors.black)),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-                const Text('Tidslinje', style: TextStyle(fontSize: 18, color: Colors.white)),
-                StreamBuilder<DocumentSnapshot>(
-                  stream: FirebaseFirestore.instance.collection('sessions').doc(widget.sessionId).snapshots(),
-                  builder: (context, snap) {
-                    if (!snap.hasData || !snap.data!.exists) {
-                      return const Text('Sessionen finns inte längre', style: TextStyle(color: Colors.white38));
-                    }
-                    final events = (snap.data!.data() as Map<String, dynamic>?)?['events'] as List? ?? [];
-                    if (events.isEmpty) return const Text('Inga händelser ännu', style: TextStyle(color: Colors.white38));
-                    return Column(
-                      children: events.map<Widget>((e) {
-                        final m = e as Map;
-                        return ListTile(
-                          leading: Icon(m['type'] == 'rebuy' ? Icons.refresh : Icons.add_circle, color: Colors.cyan, size: 20),
-                          title: Text('${m['type']?.toString().toUpperCase()} – ${m['amount'] ?? ''}', style: const TextStyle(color: Colors.white)),
-                          subtitle: Text(m['time'] ?? '', style: const TextStyle(color: Colors.white38, fontSize: 12)),
-                        );
-                      }).toList(),
-                    );
-                  },
-                ),
-              ],
-            ),
-          ),
-
-          // Overlay lock when not started
-          if (!started)
-            Positioned.fill(
+            // Everything below is locked/grayed until start
+            Opacity(
+              opacity: started ? 1.0 : 0.35,
               child: IgnorePointer(
-                ignoring: true,
-                child: Container(
-                  color: Colors.black.withOpacity(0.55),
-                  child: const Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
+                ignoring: !started,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Centered poker table
+                    Center(
+                      child: PokerTableWidget(
+                        playerCount: players.length,
+                        playerNames: players.cast<String>(),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Buy-in section
+                    const Text('Lägg till inköp / rebuy', style: TextStyle(fontSize: 16, color: Colors.white)),
+                    const SizedBox(height: 8),
+                    Row(
                       children: [
-                        Icon(Icons.lock_outline, color: Colors.white54, size: 48),
-                        SizedBox(height: 12),
-                        Text(
-                          'Sessionen har inte börjat ännu',
-                          style: TextStyle(color: Colors.white70, fontSize: 18),
-                          textAlign: TextAlign.center,
+                        Expanded(
+                          child: TextField(
+                            controller: _amountController,
+                            keyboardType: TextInputType.number,
+                            style: const TextStyle(color: Colors.white),
+                            decoration: InputDecoration(
+                              hintText: 'Belopp',
+                              hintStyle: const TextStyle(color: Colors.white38),
+                              filled: true,
+                              fillColor: const Color(0xFF1A1A1A),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                          ),
                         ),
-                        SizedBox(height: 6),
-                        Text(
-                          'Du kan lägga till inköp när tiden är inne',
-                          style: TextStyle(color: Colors.white38),
-                          textAlign: TextAlign.center,
+                        const SizedBox(width: 8),
+                        DropdownButton<String>(
+                          value: _type,
+                          dropdownColor: const Color(0xFF1A1A1A),
+                          style: const TextStyle(color: Colors.white),
+                          items: const [
+                            DropdownMenuItem(value: 'buyin', child: Text('Buy-in')),
+                            DropdownMenuItem(value: 'rebuy', child: Text('Rebuy')),
+                          ],
+                          onChanged: (v) => setState(() => _type = v!),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: _addTransaction,
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.cyan),
+                          child: const Text('Lägg till', style: TextStyle(color: Colors.black)),
                         ),
                       ],
                     ),
-                  ),
+                    const SizedBox(height: 16),
+
+                    // Timeline
+                    const Text('Tidslinje', style: TextStyle(fontSize: 18, color: Colors.white)),
+                    StreamBuilder<DocumentSnapshot>(
+                      stream: FirebaseFirestore.instance.collection('sessions').doc(widget.sessionId).snapshots(),
+                      builder: (context, snap) {
+                        if (!snap.hasData || !snap.data!.exists) {
+                          return const Text('Sessionen finns inte längre', style: TextStyle(color: Colors.white38));
+                        }
+                        final events = (snap.data!.data() as Map<String, dynamic>?)?['events'] as List? ?? [];
+                        if (events.isEmpty) return const Text('Inga händelser ännu', style: TextStyle(color: Colors.white38));
+                        return Column(
+                          children: events.map<Widget>((e) {
+                            final m = e as Map;
+                            return ListTile(
+                              leading: Icon(m['type'] == 'rebuy' ? Icons.refresh : Icons.add_circle, color: Colors.cyan, size: 20),
+                              title: Text('${m['type']?.toString().toUpperCase()} – ${m['amount'] ?? ''}', style: const TextStyle(color: Colors.white)),
+                              subtitle: Text(m['time'] ?? '', style: const TextStyle(color: Colors.white38, fontSize: 12)),
+                            );
+                          }).toList(),
+                        );
+                      },
+                    ),
+                  ],
                 ),
               ),
             ),
-        ],
+
+            // Message when locked
+            if (!started) ...[
+              const SizedBox(height: 32),
+              Center(
+                child: Column(
+                  children: [
+                    const Icon(Icons.lock_outline, color: Colors.white38, size: 40),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Sessionen har inte börjat ännu',
+                      style: TextStyle(color: Colors.white70, fontSize: 16),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Inköp och bordet låses upp när tiden är inne',
+                      style: TextStyle(color: Colors.white38, fontSize: 14),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
