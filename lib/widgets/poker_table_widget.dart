@@ -4,6 +4,7 @@ import 'dart:math' as math;
 class PokerTableWidget extends StatelessWidget {
   final int playerCount;
   final List<String> playerNames;
+  final List<String?> playerPhotoUrls;
   final bool isAdmin;
   final Function(String playerId, String playerName)? onPlayerTap;
 
@@ -11,6 +12,7 @@ class PokerTableWidget extends StatelessWidget {
     super.key,
     required this.playerCount,
     this.playerNames = const [],
+    this.playerPhotoUrls = const [],
     this.isAdmin = false,
     this.onPlayerTap,
   });
@@ -40,6 +42,7 @@ class PokerTableWidget extends StatelessWidget {
             final y = 70 * math.sin(angle);
             final name = i < playerNames.length ? playerNames[i] : 'Spelare ${i + 1}';
             final playerId = i < playerNames.length ? playerNames[i] : 'player_$i';
+            final photoUrl = i < playerPhotoUrls.length ? playerPhotoUrls[i] : null;
 
             return Positioned(
               left: 130 + x - 28,
@@ -53,7 +56,10 @@ class PokerTableWidget extends StatelessWidget {
                         CircleAvatar(
                           radius: 26,
                           backgroundColor: Colors.cyan.shade800,
-                          child: Text('${i + 1}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                          backgroundImage: photoUrl != null && photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
+                          child: photoUrl == null || photoUrl.isEmpty
+                              ? Text('${i + 1}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16))
+                              : null,
                         ),
                         if (isAdmin)
                           Positioned(
