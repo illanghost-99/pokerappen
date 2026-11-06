@@ -48,42 +48,38 @@ class LoginScreen extends StatelessWidget {
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            colors: [Color(0xFF0A0A0A), Color(0xFF1A1A2E), Color(0xFF16213E)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+            colors: [Color(0xFF0A0A0A), Color(0xFF1A1A2E), Color(0xFF0F0F23)],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
           ),
         ),
         child: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Poker theme icons instead of dice
+              // Pocket Aces visual
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.favorite, size: 48, color: Colors.red[400]),
-                  const SizedBox(width: 12),
-                  Icon(Icons.diamond, size: 48, color: Colors.red[300]),
-                  const SizedBox(width: 12),
-                  Icon(Icons.spa, size: 48, color: Colors.green[400]),
-                  const SizedBox(width: 12),
-                  Icon(Icons.local_florist, size: 48, color: Colors.blue[300]),
+                  _pokerCard('♠', 'A', Colors.black),
+                  const SizedBox(width: 16),
+                  _pokerCard('♥', 'A', Colors.red),
                 ],
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                '♠ ♥ ♣ ♦',
-                style: TextStyle(fontSize: 32, color: Colors.white70),
               ),
               const SizedBox(height: 24),
               const Text(
-                'Poker Night',
-                style: TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: Colors.white),
+                'POKER NIGHT',
+                style: TextStyle(
+                  fontSize: 32,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white,
+                  letterSpacing: 4,
+                ),
               ),
               const SizedBox(height: 8),
               const Text(
-                'Pocket Aces • Premium Session Tracker',
-                style: TextStyle(fontSize: 14, color: Colors.cyan),
+                'Pocket Aces Session Tracker',
+                style: TextStyle(fontSize: 14, color: Colors.cyan, letterSpacing: 1),
               ),
               const SizedBox(height: 48),
               ElevatedButton.icon(
@@ -95,11 +91,33 @@ class LoginScreen extends StatelessWidget {
                   foregroundColor: Colors.black,
                   padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 18),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                  elevation: 8,
                 ),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _pokerCard(String suit, String rank, Color color) {
+    return Container(
+      width: 70,
+      height: 100,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 8, offset: const Offset(2, 4)),
+        ],
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(rank, style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: color)),
+          Text(suit, style: TextStyle(fontSize: 32, color: color)),
+        ],
       ),
     );
   }
