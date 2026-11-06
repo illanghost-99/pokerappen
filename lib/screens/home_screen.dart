@@ -189,16 +189,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                             ),
                             child: ListTile(
                               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                              leading: Container(
-                                width: 48,
-                                height: 48,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  gradient: const RadialGradient(colors: [Color(0xFF00E5FF), Color(0xFF00838F)]),
-                                  boxShadow: [BoxShadow(color: Colors.cyan.withOpacity(0.4), blurRadius: 10)],
-                                ),
-                                child: const Icon(Icons.sports_esports, color: Colors.black, size: 26),
-                              ),
+                              leading: _TwoAcesIcon(),
                               title: Text(data['name'] ?? 'Session', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
                               subtitle: Text(
                                 '${data['address'] ?? ''} • ${data['type'] ?? ''}\n${start != null ? '${start.day}/${start.month} ${start.hour}:${start.minute.toString().padLeft(2, '0')}' : ''}',
@@ -217,6 +208,60 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 );
               },
             ),
+    );
+  }
+}
+
+class _TwoAcesIcon extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 48,
+      height: 48,
+      child: Stack(
+        children: [
+          // Back card (spades)
+          Positioned(
+            left: 4,
+            top: 6,
+            child: Transform.rotate(
+              angle: -0.15,
+              child: Container(
+                width: 28,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(4),
+                  boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 3)],
+                ),
+                child: const Center(
+                  child: Text('♠', style: TextStyle(fontSize: 18, color: Colors.black, fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ),
+          ),
+          // Front card (hearts)
+          Positioned(
+            left: 14,
+            top: 2,
+            child: Transform.rotate(
+              angle: 0.1,
+              child: Container(
+                width: 28,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(4),
+                  boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4)],
+                ),
+                child: const Center(
+                  child: Text('A', style: TextStyle(fontSize: 16, color: Colors.red, fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
