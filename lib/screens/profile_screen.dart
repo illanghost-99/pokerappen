@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 
@@ -55,26 +56,48 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  Future<String?> _uploadImage(String uid) async {
+    if (_newImage == null) return _photoUrl;
+    try {
+      final ref = FirebaseStorage.instance.ref().child('profile_images/$uid.jpg');
+      await ref.putFile(_newImage!);
+      return await ref.getDownloadURL();
+    } catch (e) {
+      debugPrint('Image upload error: $e');
+      return _photoUrl;
+    }
+  }
+
   Future<void> _save() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
 
     final username = _nameController.text.trim();
     if (username.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Användarnamn kan inte vara tomt')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Användarnamn kan inte vara tomt'), backgroundColor: Colors.red),
+      );
       return;
     }
 
     setState(() => _saving = true);
 
     try {
+      // Upload image if selected
+      final photoUrl = await _uploadImage(uid);
+
       await FirebaseFirestore.instance.collection('users').doc(uid).set({
         'username': username,
         'bio': _bioController.text.trim(),
         'isPrivate': _isPrivate,
+        'photoUrl': photoUrl,
       }, SetOptions(merge: true));
 
       if (mounted) {
+        setState(() {
+          _photoUrl = photoUrl;
+          _newImage = null;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Row(
@@ -183,8 +206,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     backgroundColor: Colors.cyan,
                     backgroundImage: _newImage != null
                         ? FileImage(_newImage!)
-                        : (_photoUrl != null ? NetworkImage(_photoUrl!) : null) as ImageProvider?,
-                    child: _newImage == null && _photoUrl == null
+                        : (_photoUrl != null && _photoUrl!.isNotEmpty ? NetworkImage(_photoUrl!) : null) as ImageProvider?,
+                    child: _newImage == null && (_photoUrl == null || _photoUrl!.isEmpty)
                         ? const Icon(Icons.person, size: 50, color: Colors.black)
                         : null,
                   ),
