@@ -5,8 +5,15 @@ import 'dart:math';
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
 
-class LoginScreen extends StatelessWidget {
+class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
+
+  @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  String? _error;
 
   String _generateNonce([int length = 32]) {
     const charset = '0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._';
@@ -21,6 +28,8 @@ class LoginScreen extends StatelessWidget {
   }
 
   Future<void> _signInWithApple() async {
+    setState(() => _error = null);
+
     try {
       final rawNonce = _generateNonce();
       final nonce = _sha256ofString(rawNonce);
@@ -36,8 +45,12 @@ class LoginScreen extends StatelessWidget {
       );
 
       await FirebaseAuth.instance.signInWithCredential(oauthCredential);
+    } on SignInWithAppleAuthorizationException catch (e) {
+      setState(() => _error = 'Apple-fel: ${e.code.name} - ${e.message}');
+    } on FirebaseAuthException catch (e) {
+      setState(() => _error = 'Firebase-fel: ${e.code} - ${e.message}');
     } catch (e) {
-      debugPrint('Apple sign-in error: $e');
+      setState(() => _error = 'Okänt fel: $e');
     }
   }
 
@@ -74,6 +87,22 @@ class LoginScreen extends StatelessWidget {
                   ),
                 ),
               ),
+              if (_error != null) ...[
+                const SizedBox(height: 24),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.red.withOpacity(0.5)),
+                  ),
+                  child: Text(
+                    _error!,
+                    style: const TextStyle(color: Colors.redAccent, fontSize: 13),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ],
             ],
           ),
         ),

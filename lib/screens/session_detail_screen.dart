@@ -49,7 +49,6 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
       final ended = data['ended'] == true;
 
       if (!ended && events.isNotEmpty && _sessionStartedAt == null) {
-        // Find the earliest event time
         DateTime? earliest;
         for (final e in events) {
           final t = DateTime.tryParse(e['time'] ?? '');
@@ -214,9 +213,6 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     final amount = double.tryParse(amountController.text) ?? 0;
     if (amount <= 0) return;
 
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
-
     await FirebaseFirestore.instance.collection('sessions').doc(widget.sessionId).update({
       'buyIns': FieldValue.arrayUnion([{'userId': playerId, 'playerName': playerName, 'amount': amount, 'timestamp': DateTime.now().toIso8601String(), 'type': type}]),
       'events': FieldValue.arrayUnion([{'type': type, 'userId': playerId, 'playerName': playerName, 'amount': amount, 'time': DateTime.now().toIso8601String()}]),
@@ -347,9 +343,8 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
             Text(widget.data['address'] ?? '', style: const TextStyle(fontSize: 16, color: Colors.white70)),
             const SizedBox(height: 8),
             Text('${widget.data['type'] ?? ''} • ${widget.data['currency'] ?? ''}', style: const TextStyle(color: Colors.cyan)),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
 
-            // Show count-up timer if session is live, otherwise countdown
             if (isLive)
               Container(
                 width: double.infinity,
@@ -365,7 +360,31 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                     const SizedBox(height: 8),
                     Text(
                       _formatElapsed(_elapsed),
-                      style: const TextStyle(color: Colors.white, fontSize: 42, fontWeight: FontWeight.bold, fontFeatures: [FontFeature.tabularFigures()]),
+                      style: const TextStyle(color: Colors.white, fontSize: 40, fontWeight: FontWeight.bold, fontFeatures: [FontFeature.tabularFigures()]),
+                    ),
+                    const SizedBox(height: 16),
+                    StreamBuilder<DocumentSnapshot>(
+                      stream: FirebaseFirestore.instance.collection('sessions').doc(widget.sessionId).snapshots(),
+                      builder: (context, snap) {
+                        if (!snap.hasData || !snap.data!.exists) return const SizedBox();
+                        final events = (snap.data!.data() as Map<String, dynamic>?)?['events'] as List? ?? [];
+                        double total = 0;
+                        for (final e in events) {
+                          total += (e['amount'] as num?)?.toDouble() ?? 0;
+                        }
+                        return Column(
+                          children: [
+                            const Divider(color: Colors.white12),
+                            const SizedBox(height: 8),
+                            const Text('VÄRDE I BORDET', style: TextStyle(color: Colors.amber, fontSize: 12, letterSpacing: 1.5)),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${total.toStringAsFixed(0)} SEK',
+                              style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        );
+                      },
                     ),
                   ],
                 ),
@@ -373,7 +392,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
             else
               CountdownWidget(target: start),
 
-            const SizedBox(height: 24),
+            const SizedBox(height: 28),
 
             Opacity(
               opacity: started ? 1.0 : 0.35,
@@ -390,7 +409,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                         onPlayerTap: _addBuyInForPlayer,
                       ),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 28),
 
                     const Align(
                       alignment: Alignment.centerLeft,
