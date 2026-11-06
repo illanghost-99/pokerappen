@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:io';
 
 class ProfileScreen extends StatefulWidget {
@@ -61,13 +61,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     try {
       final fileName = '${uid}_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      final ref = FirebaseStorage.instance.ref().child('profile_images/$fileName');
+      final path = 'profile-images/$fileName';
 
-      final uploadTask = await ref.putFile(_newImage!);
-      final url = await uploadTask.ref.getDownloadURL();
-      return url;
+      await Supabase.instance.client.storage
+          .from('profile-images')
+          .upload(path, _newImage!);
+
+      final publicUrl = Supabase.instance.client.storage
+          .from('profile-images')
+          .getPublicUrl(path);
+
+      return publicUrl;
     } catch (e) {
-      debugPrint('Upload error: $e');
+      debugPrint('Supabase upload error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
