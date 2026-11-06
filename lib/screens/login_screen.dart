@@ -32,25 +32,29 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final rawNonce = _generateNonce();
-      final nonce = _sha256ofString(rawNonce);
+      final hashedNonce = _sha256ofString(rawNonce);
 
       final appleCredential = await SignInWithApple.getAppleIDCredential(
-        scopes: [AppleIDAuthorizationScopes.email, AppleIDAuthorizationScopes.fullName],
-        nonce: nonce,
+        scopes: [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+        nonce: hashedNonce,
       );
 
       final oauthCredential = OAuthProvider('apple.com').credential(
         idToken: appleCredential.identityToken,
         rawNonce: rawNonce,
+        accessToken: appleCredential.authorizationCode,
       );
 
       await FirebaseAuth.instance.signInWithCredential(oauthCredential);
     } on SignInWithAppleAuthorizationException catch (e) {
-      setState(() => _error = 'Apple-fel: ${e.code.name} - ${e.message}');
+      setState(() => _error = 'Apple-fel: ${e.code.name}\n${e.message}');
     } on FirebaseAuthException catch (e) {
-      setState(() => _error = 'Firebase-fel: ${e.code} - ${e.message}');
+      setState(() => _error = 'Firebase-fel: ${e.code}\n${e.message}');
     } catch (e) {
-      setState(() => _error = 'Okänt fel: $e');
+      setState(() => _error = 'Fel: $e');
     }
   }
 
