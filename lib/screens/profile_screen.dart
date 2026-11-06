@@ -59,18 +59,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<String?> _uploadImage(String uid) async {
     if (_newImage == null) return _photoUrl;
     try {
+      debugPrint('Starting image upload for uid: $uid');
       final ref = FirebaseStorage.instance.ref().child('profile_images/$uid.jpg');
-      await ref.putFile(_newImage!);
-      return await ref.getDownloadURL();
-    } catch (e) {
-      debugPrint('Image upload error: $e');
-      return _photoUrl;
+      final uploadTask = ref.putFile(_newImage!);
+      final snapshot = await uploadTask;
+      debugPrint('Upload complete, getting download URL');
+      final url = await snapshot.ref.getDownloadURL();
+      debugPrint('Download URL: $url');
+      return url;
+    } catch (e, stack) {
+      debugPrint('Image upload FAILED: $e');
+      debugPrint('Stack: $stack');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Bilduppladdning misslyckades: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+      return null;
     }
   }
 
   Future<void> _save() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
+    if (uid == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Inte inloggad')));
+      return;
+    }
 
     final username = _nameController.text.trim();
     if (username.isEmpty) {
@@ -81,14 +99,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() => _saving = true);
 
     try {
+      debugPrint('Saving profile...');
       final photoUrl = await _uploadImage(uid);
 
+      if (_newImage != null && photoUrl == null) {
+        // Upload failed, stop here
+        if (mounted) setState(() => _saving = false);
+        return;
+      }
+
+      debugPrint('Writing to Firestore...');
       await FirebaseFirestore.instance.collection('users').doc(uid).set({
         'username': username,
         'bio': _bioController.text.trim(),
         'isPrivate': _isPrivate,
         'photoUrl': photoUrl,
       }, SetOptions(merge: true));
+
+      debugPrint('Firestore write successful');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -100,9 +128,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
         );
         Navigator.pop(context);
       }
-    } catch (e) {
+    } catch (e, stack) {
+      debugPrint('Save FAILED: $e');
+      debugPrint('Stack: $stack');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Kunde inte spara: $e'), backgroundColor: Colors.red));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Kunde inte spara: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _saving = false);
