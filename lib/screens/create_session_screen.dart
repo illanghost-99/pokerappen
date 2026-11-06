@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 
 class CreateSessionScreen extends StatefulWidget {
   const CreateSessionScreen({super.key});
@@ -18,6 +17,7 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
   TimeOfDay _selectedTime = const TimeOfDay(hour: 19, minute: 0);
   String _currency = 'SEK';
   String _type = 'Cash Game';
+  bool _isCreating = false;
 
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
@@ -39,35 +39,58 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
   }
 
   Future<void> _create() async {
+    if (_isCreating) return;
+
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
-    if (_nameController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ange ett namn')));
+    if (uid == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Du är inte inloggad')));
       return;
     }
 
-    final start = DateTime(
-      _selectedDate.year,
-      _selectedDate.month,
-      _selectedDate.day,
-      _selectedTime.hour,
-      _selectedTime.minute,
-    );
+    if (_nameController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ange ett namn på sessionen')));
+      return;
+    }
 
-    await FirebaseFirestore.instance.collection('sessions').add({
-      'name': _nameController.text.trim(),
-      'address': _addressController.text.trim(),
-      'currency': _currency,
-      'type': _type,
-      'startTime': Timestamp.fromDate(start),
-      'ownerId': uid,
-      'players': {uid: true},
-      'buyIns': [],
-      'events': [],
-      'createdAt': FieldValue.serverTimestamp(),
-    });
+    setState(() => _isCreating = true);
 
-    if (mounted) Navigator.pop(context);
+    try {
+      final start = DateTime(
+        _selectedDate.year,
+        _selectedDate.month,
+        _selectedDate.day,
+        _selectedTime.hour,
+        _selectedTime.minute,
+      );
+
+      await FirebaseFirestore.instance.collection('sessions').add({
+        'name': _nameController.text.trim(),
+        'address': _addressController.text.trim(),
+        'currency': _currency,
+        'type': _type,
+        'startTime': Timestamp.fromDate(start),
+        'ownerId': uid,
+        'players': {uid: true},
+        'buyIns': [],
+        'events': [],
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Session skapad!')),
+        );
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Kunde inte skapa: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isCreating = false);
+    }
   }
 
   @override
@@ -161,12 +184,14 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: _create,
+                onPressed: _isCreating ? null : _create,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.cyan,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
-                child: const Text('Skapa session', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                child: _isCreating
+                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                    : const Text('Skapa session', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
               ),
             ),
           ],
