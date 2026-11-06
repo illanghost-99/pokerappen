@@ -51,6 +51,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   List<QueryDocumentSnapshot> _sortSessions(List<QueryDocumentSnapshot> docs) {
     final now = DateTime.now();
+    final live = <QueryDocumentSnapshot>[];
     final upcoming = <QueryDocumentSnapshot>[];
     final finished = <QueryDocumentSnapshot>[];
 
@@ -58,13 +59,23 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       final data = doc.data() as Map<String, dynamic>;
       final start = (data['startTime'] as Timestamp?)?.toDate();
       final ended = data['ended'] == true || data['status'] == 'ended';
+      final hasEvents = (data['events'] as List?)?.isNotEmpty == true;
 
-      if (ended || (start != null && start.isBefore(now))) {
+      if (ended) {
         finished.add(doc);
+      } else if (hasEvents || (start != null && start.isBefore(now))) {
+        live.add(doc);
       } else {
         upcoming.add(doc);
       }
     }
+
+    // Live sessions first (most recent start)
+    live.sort((a, b) {
+      final aStart = (a.data() as Map)['startTime'] as Timestamp?;
+      final bStart = (b.data() as Map)['startTime'] as Timestamp?;
+      return (bStart?.toDate() ?? DateTime.now()).compareTo(aStart?.toDate() ?? DateTime.now());
+    });
 
     // Upcoming: soonest first
     upcoming.sort((a, b) {
@@ -80,7 +91,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       return (bStart?.toDate() ?? DateTime.now()).compareTo(aStart?.toDate() ?? DateTime.now());
     });
 
-    return [...upcoming, ...finished];
+    return [...live, ...upcoming, ...finished];
   }
 
   @override
@@ -197,7 +208,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         final data = doc.data() as Map<String, dynamic>;
                         final start = (data['startTime'] as Timestamp?)?.toDate();
                         final ended = data['ended'] == true || data['status'] == 'ended';
-                        final isPast = start != null && start.isBefore(DateTime.now());
+                        final hasEvents = (data['events'] as List?)?.isNotEmpty == true;
+                        final isLive = !ended && (hasEvents || (start != null && start.isBefore(DateTime.now())));
 
                         return TweenAnimationBuilder<double>(
                           tween: Tween(begin: 0.0, end: 1.0),
@@ -218,10 +230,13 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                               color: const Color(0xFF1A1A1A),
                               borderRadius: BorderRadius.circular(16),
                               border: Border.all(
-                                color: ended || isPast ? Colors.white12 : Colors.cyan.withOpacity(0.25),
+                                color: isLive ? Colors.amber.withOpacity(0.7) : (ended ? Colors.white12 : Colors.cyan.withOpacity(0.25)),
+                                width: isLive ? 2 : 1,
                               ),
                               boxShadow: [
-                                if (!ended && !isPast)
+                                if (isLive)
+                                  BoxShadow(color: Colors.amber.withOpacity(0.25), blurRadius: 16, spreadRadius: 1),
+                                if (!ended && !isLive)
                                   BoxShadow(color: Colors.cyan.withOpacity(0.08), blurRadius: 12, spreadRadius: 1),
                               ],
                             ),
@@ -231,13 +246,13 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                               title: Text(
                                 data['name'] ?? 'Session',
                                 style: TextStyle(
-                                  color: ended || isPast ? Colors.white54 : Colors.white,
+                                  color: ended ? Colors.white54 : Colors.white,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
                               subtitle: Text(
-                                '${data['address'] ?? ''} • ${data['type'] ?? ''}\n${start != null ? '${start.day}/${start.month} ${start.hour}:${start.minute.toString().padLeft(2, '0')}' : ''}${ended ? ' • Avslutad' : ''}',
-                                style: TextStyle(color: ended || isPast ? Colors.white38 : Colors.white54),
+                                '${data['address'] ?? ''} • ${data['type'] ?? ''}\n${start != null ? '${start.day}/${start.month} ${start.hour}:${start.minute.toString().padLeft(2, '0')}' : ''}${ended ? ' • Avslutad' : isLive ? ' • Pågående' : ''}',
+                                style: TextStyle(color: ended ? Colors.white38 : Colors.white54),
                               ),
                               trailing: const Icon(Icons.chevron_right, color: Colors.cyan),
                               onTap: () => Navigator.push(

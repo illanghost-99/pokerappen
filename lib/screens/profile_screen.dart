@@ -17,7 +17,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final _bioController = TextEditingController();
   bool _isPrivate = false;
   bool _loading = true;
-  bool _saving = false;
   String? _photoUrl;
   File? _newImage;
 
@@ -89,10 +88,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _save() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Inte inloggad')));
-      return;
-    }
+    if (uid == null) return;
 
     final username = _nameController.text.trim();
     if (username.isEmpty) {
@@ -100,50 +96,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return;
     }
 
-    setState(() => _saving = true);
+    // Save in background and go back immediately
+    String? photoUrl = _photoUrl;
+    if (_newImage != null) {
+      photoUrl = await _uploadImage(uid);
+      if (photoUrl == null) return;
+    }
 
-    try {
-      String? photoUrl = _photoUrl;
+    FirebaseFirestore.instance.collection('users').doc(uid).set({
+      'username': username,
+      'bio': _bioController.text.trim(),
+      'isPrivate': _isPrivate,
+      'photoUrl': photoUrl,
+    }, SetOptions(merge: true));
 
-      if (_newImage != null) {
-        photoUrl = await _uploadImage(uid);
-        if (photoUrl == null) {
-          if (mounted) setState(() => _saving = false);
-          return;
-        }
-      }
-
-      await FirebaseFirestore.instance.collection('users').doc(uid).set({
-        'username': username,
-        'bio': _bioController.text.trim(),
-        'isPrivate': _isPrivate,
-        'photoUrl': photoUrl,
-      }, SetOptions(merge: true));
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.white),
-                SizedBox(width: 10),
-                Text('Profil sparad'),
-              ],
-            ),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
-          ),
-        );
-        Navigator.pop(context);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Kunde inte spara: $e'), backgroundColor: Colors.red),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _saving = false);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(children: [Icon(Icons.check_circle, color: Colors.white), SizedBox(width: 10), Text('Sparad')]),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 1),
+        ),
+      );
+      Navigator.pop(context);
     }
   }
 
@@ -196,10 +171,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         title: const Text('Profil', style: TextStyle(color: Colors.white)),
         actions: [
           TextButton(
-            onPressed: _saving ? null : _save,
-            child: _saving
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.cyan))
-                : const Text('Spara', style: TextStyle(color: Colors.cyan, fontWeight: FontWeight.bold)),
+            onPressed: _save,
+            child: const Text('Spara', style: TextStyle(color: Colors.cyan, fontWeight: FontWeight.bold)),
           ),
         ],
       ),

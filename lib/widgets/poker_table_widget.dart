@@ -74,10 +74,15 @@ class PokerTableWidget extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      name.length > 8 ? '${name.substring(0, 6)}..' : name,
-                      style: const TextStyle(color: Colors.white70, fontSize: 11),
-                      textAlign: TextAlign.center,
+                    SizedBox(
+                      width: 60,
+                      child: Text(
+                        name,
+                        style: const TextStyle(color: Colors.white70, fontSize: 11),
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ],
                 ),
