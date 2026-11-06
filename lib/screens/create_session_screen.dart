@@ -24,7 +24,6 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
       initialDate: _selectedDate,
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 365)),
-      locale: const Locale('sv', 'SE'),
     );
     if (picked != null) setState(() => _selectedDate = picked);
   }
@@ -57,7 +56,6 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
       _selectedTime.minute,
     );
 
-    // Create in background
     FirebaseFirestore.instance.collection('sessions').add({
       'name': _nameController.text.trim(),
       'address': _addressController.text.trim(),
@@ -71,14 +69,13 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
       'createdAt': FieldValue.serverTimestamp(),
     });
 
-    // Navigate back immediately
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Session skapad'), duration: Duration(seconds: 1)));
     Navigator.pop(context);
   }
 
   @override
   Widget build(BuildContext context) {
-    final dateFormat = DateFormat('EEEE d MMMM y', 'sv');
+    final dateFormat = DateFormat('EEEE d MMMM y');
     final timeFormat = DateFormat('HH:mm');
 
     return Scaffold(
