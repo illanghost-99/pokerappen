@@ -49,6 +49,40 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     }
   }
 
+  List<QueryDocumentSnapshot> _sortSessions(List<QueryDocumentSnapshot> docs) {
+    final now = DateTime.now();
+    final upcoming = <QueryDocumentSnapshot>[];
+    final finished = <QueryDocumentSnapshot>[];
+
+    for (final doc in docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      final start = (data['startTime'] as Timestamp?)?.toDate();
+      final ended = data['ended'] == true || data['status'] == 'ended';
+
+      if (ended || (start != null && start.isBefore(now))) {
+        finished.add(doc);
+      } else {
+        upcoming.add(doc);
+      }
+    }
+
+    // Upcoming: soonest first
+    upcoming.sort((a, b) {
+      final aStart = (a.data() as Map)['startTime'] as Timestamp?;
+      final bStart = (b.data() as Map)['startTime'] as Timestamp?;
+      return (aStart?.toDate() ?? DateTime.now()).compareTo(bStart?.toDate() ?? DateTime.now());
+    });
+
+    // Finished: most recent first
+    finished.sort((a, b) {
+      final aStart = (a.data() as Map)['startTime'] as Timestamp?;
+      final bStart = (b.data() as Map)['startTime'] as Timestamp?;
+      return (bStart?.toDate() ?? DateTime.now()).compareTo(aStart?.toDate() ?? DateTime.now());
+    });
+
+    return [...upcoming, ...finished];
+  }
+
   @override
   Widget build(BuildContext context) {
     final uid = FirebaseAuth.instance.currentUser?.uid;
@@ -100,7 +134,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               stream: FirebaseFirestore.instance
                   .collection('sessions')
                   .where('players.$uid', isNotEqualTo: null)
-                  .orderBy('startTime', descending: true)
                   .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -111,7 +144,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   return Center(child: Text('Fel: ${snapshot.error}', style: const TextStyle(color: Colors.red)));
                 }
 
-                final docs = snapshot.data?.docs ?? [];
+                final docs = _sortSessions(snapshot.data?.docs ?? []);
 
                 return ListView(
                   padding: const EdgeInsets.all(16),
@@ -137,7 +170,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       ),
                     ),
                     const SizedBox(height: 24),
-                    const Text('Inkommande sessioner', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600)),
+                    const Text('Sessioner', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600)),
                     const SizedBox(height: 12),
                     if (docs.isEmpty)
                       Container(
@@ -163,6 +196,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         final doc = entry.value;
                         final data = doc.data() as Map<String, dynamic>;
                         final start = (data['startTime'] as Timestamp?)?.toDate();
+                        final ended = data['ended'] == true || data['status'] == 'ended';
+                        final isPast = start != null && start.isBefore(DateTime.now());
 
                         return TweenAnimationBuilder<double>(
                           tween: Tween(begin: 0.0, end: 1.0),
@@ -182,18 +217,27 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                             decoration: BoxDecoration(
                               color: const Color(0xFF1A1A1A),
                               borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: Colors.cyan.withOpacity(0.25)),
+                              border: Border.all(
+                                color: ended || isPast ? Colors.white12 : Colors.cyan.withOpacity(0.25),
+                              ),
                               boxShadow: [
-                                BoxShadow(color: Colors.cyan.withOpacity(0.08), blurRadius: 12, spreadRadius: 1),
+                                if (!ended && !isPast)
+                                  BoxShadow(color: Colors.cyan.withOpacity(0.08), blurRadius: 12, spreadRadius: 1),
                               ],
                             ),
                             child: ListTile(
                               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                               leading: _TwoAcesIcon(),
-                              title: Text(data['name'] ?? 'Session', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                              title: Text(
+                                data['name'] ?? 'Session',
+                                style: TextStyle(
+                                  color: ended || isPast ? Colors.white54 : Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
                               subtitle: Text(
-                                '${data['address'] ?? ''} • ${data['type'] ?? ''}\n${start != null ? '${start.day}/${start.month} ${start.hour}:${start.minute.toString().padLeft(2, '0')}' : ''}',
-                                style: const TextStyle(color: Colors.white54),
+                                '${data['address'] ?? ''} • ${data['type'] ?? ''}\n${start != null ? '${start.day}/${start.month} ${start.hour}:${start.minute.toString().padLeft(2, '0')}' : ''}${ended ? ' • Avslutad' : ''}',
+                                style: TextStyle(color: ended || isPast ? Colors.white38 : Colors.white54),
                               ),
                               trailing: const Icon(Icons.chevron_right, color: Colors.cyan),
                               onTap: () => Navigator.push(
@@ -220,7 +264,6 @@ class _TwoAcesIcon extends StatelessWidget {
       height: 48,
       child: Stack(
         children: [
-          // Back card (spades)
           Positioned(
             left: 4,
             top: 6,
@@ -240,7 +283,6 @@ class _TwoAcesIcon extends StatelessWidget {
               ),
             ),
           ),
-          // Front card (hearts)
           Positioned(
             left: 14,
             top: 2,
