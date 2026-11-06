@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:async';
 import '../widgets/countdown_widget.dart';
 import '../widgets/poker_table_widget.dart';
 import 'summary_screen.dart';
@@ -17,6 +18,9 @@ class SessionDetailScreen extends StatefulWidget {
 class _SessionDetailScreenState extends State<SessionDetailScreen> {
   List<String> _playerNames = [];
   List<String?> _playerPhotoUrls = [];
+  Timer? _timer;
+  Duration _elapsed = Duration.zero;
+  DateTime? _sessionStartedAt;
 
   bool get _hasStarted {
     final start = (widget.data['startTime'] as Timestamp?)?.toDate();
@@ -28,6 +32,58 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   void initState() {
     super.initState();
     _loadPlayerDetails();
+    _listenForSessionStart();
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  void _listenForSessionStart() {
+    FirebaseFirestore.instance.collection('sessions').doc(widget.sessionId).snapshots().listen((snap) {
+      if (!snap.exists || !mounted) return;
+      final data = snap.data()!;
+      final events = data['events'] as List? ?? [];
+      final ended = data['ended'] == true;
+
+      if (!ended && events.isNotEmpty && _sessionStartedAt == null) {
+        // Find the earliest event time
+        DateTime? earliest;
+        for (final e in events) {
+          final t = DateTime.tryParse(e['time'] ?? '');
+          if (t != null && (earliest == null || t.isBefore(earliest))) {
+            earliest = t;
+          }
+        }
+        if (earliest != null) {
+          setState(() {
+            _sessionStartedAt = earliest;
+            _elapsed = DateTime.now().difference(earliest!);
+          });
+          _startCountUp();
+        }
+      }
+    });
+  }
+
+  void _startCountUp() {
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (_sessionStartedAt != null && mounted) {
+        setState(() {
+          _elapsed = DateTime.now().difference(_sessionStartedAt!);
+        });
+      }
+    });
+  }
+
+  String _formatElapsed(Duration d) {
+    final h = d.inHours.toString().padLeft(2, '0');
+    final m = (d.inMinutes % 60).toString().padLeft(2, '0');
+    final s = (d.inSeconds % 60).toString().padLeft(2, '0');
+    return '$h:$m:$s';
   }
 
   Future<void> _loadPlayerDetails() async {
@@ -183,6 +239,41 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     }
   }
 
+  Future<void> _endSession() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A1A),
+        title: const Text('Avsluta session?', style: TextStyle(color: Colors.white)),
+        content: const Text('Sessionen markeras som avslutad.', style: TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Avbryt')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(c, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+            child: const Text('Avsluta'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true || !mounted) return;
+
+    await FirebaseFirestore.instance.collection('sessions').doc(widget.sessionId).update({
+      'ended': true,
+      'status': 'ended',
+      'endedAt': FieldValue.serverTimestamp(),
+    });
+
+    _timer?.cancel();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Session avslutad'), backgroundColor: Colors.orange),
+      );
+    }
+  }
+
   Future<void> _deleteSession() async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -222,6 +313,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     final start = (widget.data['startTime'] as Timestamp?)?.toDate() ?? DateTime.now();
     final isAdmin = widget.data['ownerId'] == FirebaseAuth.instance.currentUser?.uid;
     final started = _hasStarted;
+    final isLive = _sessionStartedAt != null;
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -230,6 +322,12 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
         title: Text(widget.data['name'] ?? 'Session', style: const TextStyle(color: Colors.white)),
         actions: [
           if (isAdmin) ...[
+            if (isLive)
+              IconButton(
+                icon: const Icon(Icons.stop_circle_outlined, color: Colors.orange),
+                tooltip: 'Avsluta session',
+                onPressed: _endSession,
+              ),
             IconButton(
               icon: const Icon(Icons.delete_forever, color: Colors.red),
               onPressed: _deleteSession,
@@ -251,7 +349,30 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
             Text('${widget.data['type'] ?? ''} • ${widget.data['currency'] ?? ''}', style: const TextStyle(color: Colors.cyan)),
             const SizedBox(height: 16),
 
-            CountdownWidget(target: start),
+            // Show count-up timer if session is live, otherwise countdown
+            if (isLive)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1A1A1A),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.green.withOpacity(0.5)),
+                ),
+                child: Column(
+                  children: [
+                    const Text('SPELTID', style: TextStyle(color: Colors.green, fontSize: 12, letterSpacing: 2)),
+                    const SizedBox(height: 8),
+                    Text(
+                      _formatElapsed(_elapsed),
+                      style: const TextStyle(color: Colors.white, fontSize: 42, fontWeight: FontWeight.bold, fontFeatures: [FontFeature.tabularFigures()]),
+                    ),
+                  ],
+                ),
+              )
+            else
+              CountdownWidget(target: start),
+
             const SizedBox(height: 24),
 
             Opacity(
