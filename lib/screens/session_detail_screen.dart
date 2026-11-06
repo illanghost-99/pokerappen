@@ -37,16 +37,36 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
       builder: (c) => AlertDialog(
         backgroundColor: const Color(0xFF1A1A1A),
         title: const Text('Radera session?', style: TextStyle(color: Colors.white)),
-        content: const Text('Sessionen försvinner för alla deltagare.', style: TextStyle(color: Colors.white70)),
+        content: const Text('Sessionen tas bort permanent från databasen och försvinner för alla deltagare.', style: TextStyle(color: Colors.white70)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Avbryt')),
-          ElevatedButton(onPressed: () => Navigator.pop(c, true), style: ElevatedButton.styleFrom(backgroundColor: Colors.red), child: const Text('Radera')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(c, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Radera permanent'),
+          ),
         ],
       ),
     );
-    if (confirm == true) {
+
+    if (confirm != true) return;
+
+    try {
+      // Permanently delete the session document from Firestore
       await FirebaseFirestore.instance.collection('sessions').doc(widget.sessionId).delete();
-      if (mounted) Navigator.pop(context);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Session raderad')),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Kunde inte radera: $e')),
+        );
+      }
     }
   }
 
@@ -64,7 +84,8 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
         actions: [
           if (isAdmin) ...[
             IconButton(
-              icon: const Icon(Icons.delete_outline, color: Colors.red),
+              icon: const Icon(Icons.delete_forever, color: Colors.red),
+              tooltip: 'Radera session',
               onPressed: _deleteSession,
             ),
             IconButton(
@@ -131,7 +152,9 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
             StreamBuilder<DocumentSnapshot>(
               stream: FirebaseFirestore.instance.collection('sessions').doc(widget.sessionId).snapshots(),
               builder: (context, snap) {
-                if (!snap.hasData) return const SizedBox();
+                if (!snap.hasData || !snap.data!.exists) {
+                  return const Text('Sessionen finns inte längre', style: TextStyle(color: Colors.white38));
+                }
                 final events = (snap.data!.data() as Map<String, dynamic>?)?['events'] as List? ?? [];
                 if (events.isEmpty) return const Text('Inga händelser ännu', style: TextStyle(color: Colors.white38));
                 return Column(

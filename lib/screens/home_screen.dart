@@ -72,6 +72,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   return const Center(child: CircularProgressIndicator(color: Colors.cyan));
                 }
 
+                if (snapshot.hasError) {
+                  return Center(child: Text('Fel: ${snapshot.error}', style: const TextStyle(color: Colors.red)));
+                }
+
                 final docs = snapshot.data?.docs ?? [];
 
                 return ListView(
