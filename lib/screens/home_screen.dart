@@ -24,11 +24,19 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _checkUsername() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
-    final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
-    if (!doc.exists || doc.data()?['username'] == null || (doc.data()?['username'] as String).isEmpty) {
-      if (mounted) {
-        await Navigator.push(context, MaterialPageRoute(builder: (_) => const UsernameSetupScreen()));
+    try {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      final username = doc.data()?['username'] as String?;
+      if (!doc.exists || username == null || username.trim().isEmpty) {
+        if (mounted) {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const UsernameSetupScreen()),
+          );
+        }
       }
+    } catch (e) {
+      debugPrint('Username check error: $e');
     }
   }
 

@@ -58,20 +58,58 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
 
-    final data = {
-      'username': _nameController.text.trim(),
+    final username = _nameController.text.trim();
+    if (username.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Användarnamn kan inte vara tomt')));
+      return;
+    }
+
+    await FirebaseFirestore.instance.collection('users').doc(uid).set({
+      'username': username,
       'bio': _bioController.text.trim(),
       'isPrivate': _isPrivate,
-    };
-
-    // TODO: Upload image to Firebase Storage if _newImage != null
-    // For now just save the profile data
-    await FirebaseFirestore.instance.collection('users').doc(uid).set(data, SetOptions(merge: true));
+    }, SetOptions(merge: true));
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Profil sparad'), duration: Duration(seconds: 1)),
       );
+    }
+  }
+
+  Future<void> _deleteAccount() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A1A),
+        title: const Text('Radera konto?', style: TextStyle(color: Colors.white)),
+        content: const Text('Detta tar bort ditt konto och all data. Det går inte att ångra.', style: TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Avbryt')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(c, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Radera konto'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).delete();
+      await user.delete();
+      if (mounted) Navigator.popUntil(context, (route) => route.isFirst);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Kunde inte radera: $e')),
+        );
+      }
     }
   }
 
@@ -175,10 +213,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: OutlinedButton(
                 onPressed: _logout,
                 style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Colors.white38),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+                child: const Text('Logga ut', style: TextStyle(color: Colors.white)),
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: _deleteAccount,
+                style: OutlinedButton.styleFrom(
                   side: const BorderSide(color: Colors.red),
                   padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
-                child: const Text('Logga ut', style: TextStyle(color: Colors.red)),
+                child: const Text('Radera konto', style: TextStyle(color: Colors.red)),
               ),
             ),
           ],
