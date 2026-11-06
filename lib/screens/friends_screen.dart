@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'chat_screen.dart';
 
 class FriendsScreen extends StatefulWidget {
   const FriendsScreen({super.key});
@@ -9,117 +10,196 @@ class FriendsScreen extends StatefulWidget {
   State<FriendsScreen> createState() => _FriendsScreenState();
 }
 
-class _FriendsScreenState extends State<FriendsScreen> {
+class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProviderStateMixin {
   final _searchController = TextEditingController();
-  List<QueryDocumentSnapshot> _results = [];
-  bool _searching = false;
+  late TabController _tabController;
 
-  Future<void> _search() async {
-    final q = _searchController.text.trim();
-    if (q.isEmpty) return;
-    setState(() => _searching = true);
-    final snap = await FirebaseFirestore.instance
-        .collection('users')
-        .where('username', isGreaterThanOrEqualTo: q)
-        .where('username', isLessThanOrEqualTo: '$q\uf8ff')
-        .limit(10)
-        .get();
-    setState(() {
-      _results = snap.docs;
-      _searching = false;
-    });
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 3, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _sendRequest(String toUid) async {
-    final fromUid = FirebaseAuth.instance.currentUser?.uid;
-    if (fromUid == null) return;
+    final me = FirebaseAuth.instance.currentUser?.uid;
+    if (me == null) return;
     await FirebaseFirestore.instance.collection('friendRequests').add({
-      'from': fromUid,
+      'from': me,
       'to': toUid,
       'status': 'pending',
       'createdAt': FieldValue.serverTimestamp(),
     });
-    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Förfrågan skickad')));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vänförfrågan skickad'), duration: Duration(seconds: 1)),
+      );
+    }
+  }
+
+  Future<void> _acceptRequest(String requestId, String fromUid) async {
+    final me = FirebaseAuth.instance.currentUser?.uid;
+    if (me == null) return;
+    final batch = FirebaseFirestore.instance.batch();
+    batch.update(FirebaseFirestore.instance.collection('friendRequests').doc(requestId), {'status': 'accepted'});
+    batch.set(FirebaseFirestore.instance.collection('users').doc(me).collection('friends').doc(fromUid), {'addedAt': FieldValue.serverTimestamp()});
+    batch.set(FirebaseFirestore.instance.collection('users').doc(fromUid).collection('friends').doc(me), {'addedAt': FieldValue.serverTimestamp()});
+    await batch.commit();
   }
 
   @override
   Widget build(BuildContext context) {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final me = FirebaseAuth.instance.currentUser?.uid;
+
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: Colors.black,
         title: const Text('Vänner', style: TextStyle(color: Colors.white)),
+        bottom: TabBar(
+          controller: _tabController,
+          indicatorColor: Colors.cyan,
+          labelColor: Colors.cyan,
+          unselectedLabelColor: Colors.white54,
+          tabs: const [
+            Tab(text: 'Sök'),
+            Tab(text: 'Förfrågningar'),
+            Tab(text: 'Vänner'),
+          ],
+        ),
       ),
-      body: Column(
+      body: TabBarView(
+        controller: _tabController,
         children: [
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _searchController,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      hintText: 'Sök användarnamn',
-                      hintStyle: const TextStyle(color: Colors.white38),
-                      filled: true,
-                      fillColor: const Color(0xFF1A1A1A),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    onSubmitted: (_) => _search(),
+          // Search tab
+          Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: TextField(
+                  controller: _searchController,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    hintText: 'Sök användarnamn',
+                    hintStyle: const TextStyle(color: Colors.white38),
+                    filled: true,
+                    fillColor: const Color(0xFF1A1A1A),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    prefixIcon: const Icon(Icons.search, color: Colors.cyan),
                   ),
+                  onChanged: (_) => setState(() {}),
                 ),
-                const SizedBox(width: 8),
-                IconButton(icon: const Icon(Icons.search, color: Colors.cyan), onPressed: _search),
-              ],
-            ),
-          ),
-          if (_searching) const LinearProgressIndicator(color: Colors.cyan),
-          if (_results.isNotEmpty)
-            SizedBox(
-              height: 120,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: _results.length,
-                itemBuilder: (_, i) {
-                  final d = _results[i].data() as Map<String, dynamic>;
-                  return Card(
-                    color: const Color(0xFF1A1A1A),
-                    child: Padding(
-                      padding: const EdgeInsets.all(8),
-                      child: Column(
-                        children: [
-                          Text(d['username'] ?? '', style: const TextStyle(color: Colors.white)),
-                          TextButton(onPressed: () => _sendRequest(_results[i].id), child: const Text('Lägg till')),
-                        ],
-                      ),
-                    ),
-                  );
-                },
               ),
-            ),
-          const Divider(color: Colors.white12),
-          const Padding(padding: EdgeInsets.all(8), child: Text('Dina vänner', style: TextStyle(color: Colors.white54))),
-          Expanded(
-            child: uid == null
-                ? const SizedBox()
-                : StreamBuilder<DocumentSnapshot>(
-                    stream: FirebaseFirestore.instance.collection('users').doc(uid).snapshots(),
-                    builder: (context, snap) {
-                      if (!snap.hasData) return const Center(child: CircularProgressIndicator());
-                      final friends = (snap.data!.data() as Map?)?['friends'] as List? ?? [];
-                      if (friends.isEmpty) return const Center(child: Text('Inga vänner ännu', style: TextStyle(color: Colors.white38)));
-                      return ListView.builder(
-                        itemCount: friends.length,
-                        itemBuilder: (_, i) => ListTile(
-                          leading: const CircleAvatar(child: Icon(Icons.person)),
-                          title: Text(friends[i].toString(), style: const TextStyle(color: Colors.white)),
+              Expanded(
+                child: StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance.collection('users').snapshots(),
+                  builder: (context, snap) {
+                    if (!snap.hasData) return const Center(child: CircularProgressIndicator(color: Colors.cyan));
+                    final query = _searchController.text.toLowerCase();
+                    final users = snap.data!.docs.where((d) {
+                      final name = (d.data() as Map)['username']?.toString().toLowerCase() ?? '';
+                      return name.contains(query) && d.id != me;
+                    }).toList();
+
+                    if (users.isEmpty) return const Center(child: Text('Inga användare', style: TextStyle(color: Colors.white38)));
+
+                    return ListView.builder(
+                      itemCount: users.length,
+                      itemBuilder: (context, i) {
+                        final data = users[i].data() as Map;
+                        return AnimatedContainer(
+                          duration: const Duration(milliseconds: 300),
+                          child: ListTile(
+                            leading: const CircleAvatar(backgroundColor: Colors.cyan, child: Icon(Icons.person, color: Colors.black)),
+                            title: Text(data['username'] ?? 'Okänd', style: const TextStyle(color: Colors.white)),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.person_add, color: Colors.cyan),
+                              onPressed: () => _sendRequest(users[i].id),
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+
+          // Requests tab
+          StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('friendRequests')
+                .where('to', isEqualTo: me)
+                .where('status', isEqualTo: 'pending')
+                .snapshots(),
+            builder: (context, snap) {
+              if (!snap.hasData) return const Center(child: CircularProgressIndicator(color: Colors.cyan));
+              final requests = snap.data!.docs;
+              if (requests.isEmpty) return const Center(child: Text('Inga förfrågningar', style: TextStyle(color: Colors.white38)));
+
+              return ListView.builder(
+                itemCount: requests.length,
+                itemBuilder: (context, i) {
+                  final req = requests[i].data() as Map;
+                  return FutureBuilder<DocumentSnapshot>(
+                    future: FirebaseFirestore.instance.collection('users').doc(req['from']).get(),
+                    builder: (context, userSnap) {
+                      final name = userSnap.data?.data() != null ? (userSnap.data!.data() as Map)['username'] : 'Okänd';
+                      return ListTile(
+                        title: Text(name.toString(), style: const TextStyle(color: Colors.white)),
+                        trailing: ElevatedButton(
+                          onPressed: () => _acceptRequest(requests[i].id, req['from']),
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.cyan),
+                          child: const Text('Acceptera', style: TextStyle(color: Colors.black)),
                         ),
                       );
                     },
-                  ),
+                  );
+                },
+              );
+            },
+          ),
+
+          // Friends tab
+          StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance.collection('users').doc(me).collection('friends').snapshots(),
+            builder: (context, snap) {
+              if (!snap.hasData) return const Center(child: CircularProgressIndicator(color: Colors.cyan));
+              final friends = snap.data!.docs;
+              if (friends.isEmpty) return const Center(child: Text('Inga vänner ännu', style: TextStyle(color: Colors.white38)));
+
+              return ListView.builder(
+                itemCount: friends.length,
+                itemBuilder: (context, i) {
+                  final friendId = friends[i].id;
+                  return FutureBuilder<DocumentSnapshot>(
+                    future: FirebaseFirestore.instance.collection('users').doc(friendId).get(),
+                    builder: (context, userSnap) {
+                      final data = userSnap.data?.data() as Map? ?? {};
+                      final name = data['username'] ?? 'Okänd';
+                      return ListTile(
+                        leading: const CircleAvatar(backgroundColor: Colors.cyan, child: Icon(Icons.person, color: Colors.black)),
+                        title: Text(name.toString(), style: const TextStyle(color: Colors.white)),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.chat_bubble_outline, color: Colors.cyan),
+                          onPressed: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => ChatScreen(friendId: friendId, friendName: name.toString())),
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
+              );
+            },
           ),
         ],
       ),
