@@ -74,20 +74,24 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
         'buyIns': [],
         'events': [],
         'createdAt': FieldValue.serverTimestamp(),
-      });
+      }).timeout(const Duration(seconds: 10));
 
       if (!mounted) return;
 
+      // Show success and go back
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Session skapad!'), duration: Duration(seconds: 2)),
+        const SnackBar(
+          content: Text('Session skapad!'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
+        ),
       );
 
-      await Future.delayed(const Duration(milliseconds: 500));
-      if (mounted) Navigator.of(context).pop();
+      Navigator.of(context).pop();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Kunde inte skapa: $e')),
+          SnackBar(content: Text('Fel: $e'), backgroundColor: Colors.red),
         );
         setState(() => _isCreating = false);
       }
