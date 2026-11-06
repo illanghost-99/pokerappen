@@ -31,6 +31,25 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     _amountController.clear();
   }
 
+  Future<void> _deleteSession() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A1A),
+        title: const Text('Radera session?', style: TextStyle(color: Colors.white)),
+        content: const Text('Sessionen försvinner för alla deltagare.', style: TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Avbryt')),
+          ElevatedButton(onPressed: () => Navigator.pop(c, true), style: ElevatedButton.styleFrom(backgroundColor: Colors.red), child: const Text('Radera')),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      await FirebaseFirestore.instance.collection('sessions').doc(widget.sessionId).delete();
+      if (mounted) Navigator.pop(context);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final start = (widget.data['startTime'] as Timestamp?)?.toDate() ?? DateTime.now();
@@ -43,11 +62,16 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
         backgroundColor: Colors.black,
         title: Text(widget.data['name'] ?? 'Session', style: const TextStyle(color: Colors.white)),
         actions: [
-          if (isAdmin)
+          if (isAdmin) ...[
+            IconButton(
+              icon: const Icon(Icons.delete_outline, color: Colors.red),
+              onPressed: _deleteSession,
+            ),
             IconButton(
               icon: const Icon(Icons.summarize, color: Colors.cyan),
               onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => SummaryScreen(sessionId: widget.sessionId))),
             ),
+          ],
         ],
       ),
       body: SingleChildScrollView(
