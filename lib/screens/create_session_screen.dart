@@ -14,7 +14,7 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
   final _addressController = TextEditingController();
   String _currency = 'SEK';
   String _type = 'Cash Game';
-  DateTime _date = DateTime.now();
+  DateTime _date = DateTime.now().add(const Duration(hours: 1));
 
   Future<void> _create() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
@@ -39,24 +39,62 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Ny pokersession')),
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        title: const Text('Ny pokersession', style: TextStyle(color: Colors.white)),
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
+        child: ListView(
           children: [
-            TextField(controller: _nameController, decoration: const InputDecoration(labelText: 'Namn')),
-            TextField(controller: _addressController, decoration: const InputDecoration(labelText: 'Adress')),
-            DropdownButton<String>(
+            TextField(
+              controller: _nameController,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: 'Namn på session',
+                labelStyle: TextStyle(color: Colors.white54),
+                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.cyan)),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _addressController,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: 'Adress',
+                labelStyle: TextStyle(color: Colors.white54),
+                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.cyan)),
+              ),
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
               value: _currency,
+              dropdownColor: const Color(0xFF1A1A1A),
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(labelText: 'Valuta', labelStyle: TextStyle(color: Colors.white54)),
               items: ['SEK', 'EUR', 'USD'].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
               onChanged: (v) => setState(() => _currency = v!),
             ),
-            DropdownButton<String>(
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
               value: _type,
+              dropdownColor: const Color(0xFF1A1A1A),
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(labelText: 'Typ', labelStyle: TextStyle(color: Colors.white54)),
               items: ['Cash Game', 'Turnering'].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
               onChanged: (v) => setState(() => _type = v!),
             ),
-            ElevatedButton(onPressed: _create, child: const Text('Skapa')),
+            const SizedBox(height: 32),
+            ElevatedButton(
+              onPressed: _create,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.cyan,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Text('Skapa session', style: TextStyle(color: Colors.black, fontSize: 16)),
+            ),
           ],
         ),
       ),
