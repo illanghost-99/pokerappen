@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import '../services/notification_service.dart';
 
 class CreateSessionScreen extends StatefulWidget {
   const CreateSessionScreen({super.key});
@@ -36,7 +37,7 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
     if (picked != null) setState(() => _selectedTime = picked);
   }
 
-  void _create() {
+  Future<void> _create() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Inte inloggad')));
@@ -56,7 +57,7 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
       _selectedTime.minute,
     );
 
-    FirebaseFirestore.instance.collection('sessions').add({
+    final ref = await FirebaseFirestore.instance.collection('sessions').add({
       'name': _nameController.text.trim(),
       'address': _addressController.text.trim(),
       'currency': _currency,
@@ -69,8 +70,16 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
       'createdAt': FieldValue.serverTimestamp(),
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Session skapad'), duration: Duration(seconds: 1)));
-    Navigator.pop(context);
+    await NotificationService.scheduleSessionReminders(
+      sessionId: ref.id,
+      sessionName: _nameController.text.trim(),
+      startTime: start,
+    );
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Session skapad'), duration: Duration(seconds: 1)));
+      Navigator.pop(context);
+    }
   }
 
   @override
