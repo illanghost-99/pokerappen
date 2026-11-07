@@ -13,15 +13,14 @@ class FriendsScreen extends StatefulWidget {
 class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProviderStateMixin {
   final _searchController = TextEditingController();
   late TabController _tabController;
-  List<QueryDocumentSnapshot> _allUsers = [];
-  bool _loadingUsers = true;
-  bool _showDebug = true; // Debug mode - visa alla
+  List<QueryDocumentSnapshot> _searchResults = [];
+  bool _searching = false;
+  Set<String> _sentRequests = {};
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
-    _loadUsers();
   }
 
   @override
@@ -31,33 +30,70 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
     super.dispose();
   }
 
-  Future<void> _loadUsers() async {
+  Future<void> _search(String query) async {
+    final q = query.trim().toLowerCase();
+    if (q.isEmpty) {
+      setState(() {
+        _searchResults = [];
+        _searching = false;
+      });
+      return;
+    }
+
+    setState(() => _searching = true);
+
     try {
       final snap = await FirebaseFirestore.instance.collection('users').get();
+      final me = FirebaseAuth.instance.currentUser?.uid;
+
+      final results = snap.docs.where((d) {
+        if (d.id == me) return false;
+        final data = d.data();
+        final name = (data['username'] as String?)?.toLowerCase() ?? '';
+        final hasSet = data['hasSetUsername'] == true;
+        return hasSet && name.isNotEmpty && name.contains(q);
+      }).toList();
+
       if (mounted) {
         setState(() {
-          _allUsers = snap.docs;
-          _loadingUsers = false;
+          _searchResults = results;
+          _searching = false;
         });
       }
     } catch (e) {
-      debugPrint('Load users error: $e');
-      if (mounted) setState(() => _loadingUsers = false);
+      debugPrint('Search error: $e');
+      if (mounted) setState(() => _searching = false);
     }
   }
 
-  Future<void> _sendRequest(String toUid) async {
+  Future<void> _sendRequest(String toUid, String username) async {
     final me = FirebaseAuth.instance.currentUser?.uid;
     if (me == null) return;
+
+    setState(() => _sentRequests.add(toUid));
+
     await FirebaseFirestore.instance.collection('friendRequests').add({
       'from': me,
       'to': toUid,
       'status': 'pending',
       'createdAt': FieldValue.serverTimestamp(),
     });
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Vänförfrågan skickad'), duration: Duration(seconds: 1)),
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle, color: Colors.white, size: 18),
+              const SizedBox(width: 8),
+              Text('Förfrågan skickad till $username'),
+            ],
+          ),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
       );
     }
   }
@@ -65,11 +101,39 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
   Future<void> _acceptRequest(String requestId, String fromUid) async {
     final me = FirebaseAuth.instance.currentUser?.uid;
     if (me == null) return;
+
     final batch = FirebaseFirestore.instance.batch();
-    batch.update(FirebaseFirestore.instance.collection('friendRequests').doc(requestId), {'status': 'accepted'});
-    batch.set(FirebaseFirestore.instance.collection('users').doc(me).collection('friends').doc(fromUid), {'addedAt': FieldValue.serverTimestamp()});
-    batch.set(FirebaseFirestore.instance.collection('users').doc(fromUid).collection('friends').doc(me), {'addedAt': FieldValue.serverTimestamp()});
+    batch.update(
+      FirebaseFirestore.instance.collection('friendRequests').doc(requestId),
+      {'status': 'accepted'},
+    );
+    batch.set(
+      FirebaseFirestore.instance.collection('users').doc(me).collection('friends').doc(fromUid),
+      {'addedAt': FieldValue.serverTimestamp()},
+    );
+    batch.set(
+      FirebaseFirestore.instance.collection('users').doc(fromUid).collection('friends').doc(me),
+      {'addedAt': FieldValue.serverTimestamp()},
+    );
     await batch.commit();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Row(
+            children: [
+              Icon(Icons.people, color: Colors.white, size: 18),
+              SizedBox(width: 8),
+              Text('Ni är nu vänner!'),
+            ],
+          ),
+          backgroundColor: Colors.cyan.shade700,
+          duration: const Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    }
   }
 
   @override
@@ -80,10 +144,11 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
       backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: Colors.black,
-        title: const Text('Vänner', style: TextStyle(color: Colors.white)),
+        title: const Text('Vänner', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: Colors.cyan,
+          indicatorWeight: 3,
           labelColor: Colors.cyan,
           unselectedLabelColor: Colors.white54,
           tabs: const [
@@ -96,6 +161,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
       body: TabBarView(
         controller: _tabController,
         children: [
+          // Search tab
           Column(
             children: [
               Padding(
@@ -108,93 +174,101 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
                     hintStyle: const TextStyle(color: Colors.white38),
                     filled: true,
                     fillColor: const Color(0xFF1A1A1A),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    prefixIcon: const Icon(Icons.search, color: Colors.cyan),
-                  ),
-                  onChanged: (_) => setState(() {}),
-                ),
-              ),
-              // Debug toggle
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    const Text('Visa alla (debug)', style: TextStyle(color: Colors.orange, fontSize: 12)),
-                    const Spacer(),
-                    Switch(
-                      value: _showDebug,
-                      onChanged: (v) => setState(() => _showDebug = v),
-                      activeColor: Colors.orange,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide.none,
                     ),
-                  ],
+                    prefixIcon: const Icon(Icons.search, color: Colors.cyan),
+                    suffixIcon: _searchController.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear, color: Colors.white38),
+                            onPressed: () {
+                              _searchController.clear();
+                              _search('');
+                            },
+                          )
+                        : null,
+                  ),
+                  onChanged: (v) {
+                    setState(() {});
+                    _search(v);
+                  },
                 ),
               ),
               Expanded(
-                child: _loadingUsers
+                child: _searching
                     ? const Center(child: CircularProgressIndicator(color: Colors.cyan))
-                    : Builder(builder: (context) {
-                        final query = _searchController.text.toLowerCase().trim();
-                        final users = _allUsers.where((d) {
-                          if (d.id == me) return false;
-                          final data = d.data() as Map? ?? {};
-                          final name = (data['username'] as String?)?.toLowerCase() ?? '';
-                          final hasSet = data['hasSetUsername'] == true;
-
-                          // Debug mode: visa alla
-                          if (_showDebug) {
-                            if (query.isEmpty) return true;
-                            return name.contains(query) || d.id.toLowerCase().contains(query);
-                          }
-
-                          // Normal mode
-                          if (!hasSet || name.isEmpty) return false;
-                          if (query.isEmpty) return true;
-                          return name.contains(query);
-                        }).toList();
-
-                        if (users.isEmpty) {
-                          return Center(
+                    : _searchController.text.trim().isEmpty
+                        ? const Center(
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                const Text('Inga användare hittades', style: TextStyle(color: Colors.white38)),
-                                const SizedBox(height: 8),
-                                Text('${_allUsers.length} användare totalt', style: const TextStyle(color: Colors.white24, fontSize: 12)),
+                                Icon(Icons.search, size: 64, color: Colors.white12),
+                                SizedBox(height: 16),
+                                Text('Sök efter användarnamn', style: TextStyle(color: Colors.white38, fontSize: 16)),
                               ],
                             ),
-                          );
-                        }
+                          )
+                        : _searchResults.isEmpty
+                            ? const Center(
+                                child: Text('Inga användare hittades', style: TextStyle(color: Colors.white38)),
+                              )
+                            : ListView.builder(
+                                padding: const EdgeInsets.symmetric(horizontal: 8),
+                                itemCount: _searchResults.length,
+                                itemBuilder: (context, i) {
+                                  final doc = _searchResults[i];
+                                  final data = doc.data() as Map;
+                                  final username = data['username'] as String? ?? 'Okänd';
+                                  final photoUrl = data['photoUrl'] as String?;
+                                  final alreadySent = _sentRequests.contains(doc.id);
 
-                        return ListView.builder(
-                          itemCount: users.length,
-                          itemBuilder: (context, i) {
-                            final data = users[i].data() as Map? ?? {};
-                            final photoUrl = data['photoUrl'] as String?;
-                            final username = data['username'] as String? ?? '(inget namn)';
-                            final hasSet = data['hasSetUsername'] == true;
-                            return ListTile(
-                              leading: CircleAvatar(
-                                backgroundColor: hasSet ? Colors.cyan : Colors.grey,
-                                backgroundImage: photoUrl != null && photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
-                                child: photoUrl == null || photoUrl.isEmpty ? const Icon(Icons.person, color: Colors.black) : null,
+                                  return TweenAnimationBuilder<double>(
+                                    tween: Tween(begin: 0.0, end: 1.0),
+                                    duration: Duration(milliseconds: 300 + i * 50),
+                                    curve: Curves.easeOutCubic,
+                                    builder: (context, value, child) {
+                                      return Opacity(
+                                        opacity: value,
+                                        child: Transform.translate(
+                                          offset: Offset(0, 20 * (1 - value)),
+                                          child: child,
+                                        ),
+                                      );
+                                    },
+                                    child: Container(
+                                      margin: const EdgeInsets.symmetric(vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF1A1A1A),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: ListTile(
+                                        leading: CircleAvatar(
+                                          backgroundColor: Colors.cyan,
+                                          backgroundImage: photoUrl != null && photoUrl.isNotEmpty
+                                              ? NetworkImage(photoUrl)
+                                              : null,
+                                          child: photoUrl == null || photoUrl.isEmpty
+                                              ? const Icon(Icons.person, color: Colors.black)
+                                              : null,
+                                        ),
+                                        title: Text(username, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+                                        trailing: alreadySent
+                                            ? const Icon(Icons.check, color: Colors.green)
+                                            : IconButton(
+                                                icon: const Icon(Icons.person_add, color: Colors.cyan),
+                                                onPressed: () => _sendRequest(doc.id, username),
+                                              ),
+                                      ),
+                                    ),
+                                  );
+                                },
                               ),
-                              title: Text(username, style: const TextStyle(color: Colors.white)),
-                              subtitle: Text(
-                                'hasSet: $hasSet | ID: ${users[i].id.substring(0, 8)}...',
-                                style: const TextStyle(color: Colors.white38, fontSize: 11),
-                              ),
-                              trailing: IconButton(
-                                icon: const Icon(Icons.person_add, color: Colors.cyan),
-                                onPressed: () => _sendRequest(users[i].id),
-                              ),
-                            );
-                          },
-                        );
-                      }),
               ),
             ],
           ),
 
+          // Requests tab
           StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
                 .collection('friendRequests')
@@ -202,24 +276,78 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
                 .where('status', isEqualTo: 'pending')
                 .snapshots(),
             builder: (context, snap) {
-              if (!snap.hasData) return const Center(child: CircularProgressIndicator(color: Colors.cyan));
+              if (!snap.hasData) {
+                return const Center(child: CircularProgressIndicator(color: Colors.cyan));
+              }
               final requests = snap.data!.docs;
-              if (requests.isEmpty) return const Center(child: Text('Inga förfrågningar', style: TextStyle(color: Colors.white38)));
+              if (requests.isEmpty) {
+                return const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.inbox, size: 64, color: Colors.white12),
+                      SizedBox(height: 16),
+                      Text('Inga förfrågningar', style: TextStyle(color: Colors.white38, fontSize: 16)),
+                    ],
+                  ),
+                );
+              }
 
               return ListView.builder(
+                padding: const EdgeInsets.all(8),
                 itemCount: requests.length,
                 itemBuilder: (context, i) {
                   final req = requests[i].data() as Map;
+                  final fromUid = req['from'] as String;
+
                   return FutureBuilder<DocumentSnapshot>(
-                    future: FirebaseFirestore.instance.collection('users').doc(req['from']).get(),
+                    future: FirebaseFirestore.instance.collection('users').doc(fromUid).get(),
                     builder: (context, userSnap) {
-                      final name = userSnap.data?.data() != null ? (userSnap.data!.data() as Map)['username'] : 'Okänd';
-                      return ListTile(
-                        title: Text(name.toString(), style: const TextStyle(color: Colors.white)),
-                        trailing: ElevatedButton(
-                          onPressed: () => _acceptRequest(requests[i].id, req['from']),
-                          style: ElevatedButton.styleFrom(backgroundColor: Colors.cyan),
-                          child: const Text('Acceptera', style: TextStyle(color: Colors.black)),
+                      final userData = userSnap.data?.data() as Map? ?? {};
+                      final name = userData['username'] ?? 'Okänd';
+                      final photoUrl = userData['photoUrl'] as String?;
+
+                      return TweenAnimationBuilder<double>(
+                        tween: Tween(begin: 0.0, end: 1.0),
+                        duration: Duration(milliseconds: 300 + i * 50),
+                        curve: Curves.easeOutCubic,
+                        builder: (context, value, child) {
+                          return Opacity(
+                            opacity: value,
+                            child: Transform.translate(
+                              offset: Offset(0, 15 * (1 - value)),
+                              child: child,
+                            ),
+                          );
+                        },
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1A1A1A),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.cyan.withOpacity(0.3)),
+                          ),
+                          child: ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: Colors.cyan,
+                              backgroundImage: photoUrl != null && photoUrl.isNotEmpty
+                                  ? NetworkImage(photoUrl)
+                                  : null,
+                              child: photoUrl == null || photoUrl.isEmpty
+                                  ? const Icon(Icons.person, color: Colors.black)
+                                  : null,
+                            ),
+                            title: Text(name.toString(), style: const TextStyle(color: Colors.white)),
+                            subtitle: const Text('Vill bli vän', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                            trailing: ElevatedButton(
+                              onPressed: () => _acceptRequest(requests[i].id, fromUid),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.cyan,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                              child: const Text('Acceptera', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                            ),
+                          ),
                         ),
                       );
                     },
@@ -229,35 +357,96 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
             },
           ),
 
+          // Friends tab
           StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance.collection('users').doc(me).collection('friends').snapshots(),
+            stream: FirebaseFirestore.instance
+                .collection('users')
+                .doc(me)
+                .collection('friends')
+                .snapshots(),
             builder: (context, snap) {
-              if (!snap.hasData) return const Center(child: CircularProgressIndicator(color: Colors.cyan));
-              final friends = snap.data!.docs;
-              if (friends.isEmpty) return const Center(child: Text('Inga vänner ännu', style: TextStyle(color: Colors.white38)));
+              if (snap.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator(color: Colors.cyan));
+              }
+              if (snap.hasError) {
+                return Center(child: Text('Fel: ${snap.error}', style: const TextStyle(color: Colors.red)));
+              }
+
+              final friends = snap.data?.docs ?? [];
+              if (friends.isEmpty) {
+                return const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.people_outline, size: 64, color: Colors.white12),
+                      SizedBox(height: 16),
+                      Text('Inga vänner ännu', style: TextStyle(color: Colors.white38, fontSize: 16)),
+                      SizedBox(height: 8),
+                      Text('Sök efter användare och skicka förfrågningar', style: TextStyle(color: Colors.white24, fontSize: 13)),
+                    ],
+                  ),
+                );
+              }
 
               return ListView.builder(
+                padding: const EdgeInsets.all(8),
                 itemCount: friends.length,
                 itemBuilder: (context, i) {
                   final friendId = friends[i].id;
+
                   return FutureBuilder<DocumentSnapshot>(
                     future: FirebaseFirestore.instance.collection('users').doc(friendId).get(),
                     builder: (context, userSnap) {
+                      if (!userSnap.hasData) {
+                        return const ListTile(
+                          leading: CircleAvatar(backgroundColor: Colors.grey),
+                          title: Text('Laddar...', style: TextStyle(color: Colors.white38)),
+                        );
+                      }
+
                       final data = userSnap.data?.data() as Map? ?? {};
                       final name = data['username'] ?? 'Okänd';
                       final photoUrl = data['photoUrl'] as String?;
-                      return ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: Colors.cyan,
-                          backgroundImage: photoUrl != null && photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
-                          child: photoUrl == null || photoUrl.isEmpty ? const Icon(Icons.person, color: Colors.black) : null,
-                        ),
-                        title: Text(name.toString(), style: const TextStyle(color: Colors.white)),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.chat_bubble_outline, color: Colors.cyan),
-                          onPressed: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => ChatScreen(friendId: friendId, friendName: name.toString())),
+
+                      return TweenAnimationBuilder<double>(
+                        tween: Tween(begin: 0.0, end: 1.0),
+                        duration: Duration(milliseconds: 300 + i * 50),
+                        curve: Curves.easeOutCubic,
+                        builder: (context, value, child) {
+                          return Opacity(
+                            opacity: value,
+                            child: Transform.translate(
+                              offset: Offset(0, 15 * (1 - value)),
+                              child: child,
+                            ),
+                          );
+                        },
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1A1A1A),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: Colors.cyan,
+                              backgroundImage: photoUrl != null && photoUrl.isNotEmpty
+                                  ? NetworkImage(photoUrl)
+                                  : null,
+                              child: photoUrl == null || photoUrl.isEmpty
+                                  ? const Icon(Icons.person, color: Colors.black)
+                                  : null,
+                            ),
+                            title: Text(name.toString(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.chat_bubble_outline, color: Colors.cyan),
+                              onPressed: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => ChatScreen(friendId: friendId, friendName: name.toString()),
+                                ),
+                              ),
+                            ),
                           ),
                         ),
                       );
