@@ -16,6 +16,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
   late AnimationController _animController;
+  bool _checkedUsername = false;
 
   @override
   void initState() {
@@ -31,16 +32,20 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 
   Future<void> _checkUsername() async {
+    if (_checkedUsername) return;
+    _checkedUsername = true;
+
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
+
     try {
       final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
       final username = doc.data()?['username'] as String?;
+
       if (!doc.exists || username == null || username.trim().isEmpty) {
         if (mounted) {
-          await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const UsernameSetupScreen()),
+          await Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const UsernameSetupScreen(), fullscreenDialog: true),
           );
         }
       }
@@ -70,21 +75,18 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       }
     }
 
-    // Live sessions first (most recent start)
     live.sort((a, b) {
       final aStart = (a.data() as Map)['startTime'] as Timestamp?;
       final bStart = (b.data() as Map)['startTime'] as Timestamp?;
       return (bStart?.toDate() ?? DateTime.now()).compareTo(aStart?.toDate() ?? DateTime.now());
     });
 
-    // Upcoming: soonest first
     upcoming.sort((a, b) {
       final aStart = (a.data() as Map)['startTime'] as Timestamp?;
       final bStart = (b.data() as Map)['startTime'] as Timestamp?;
       return (aStart?.toDate() ?? DateTime.now()).compareTo(bStart?.toDate() ?? DateTime.now());
     });
 
-    // Finished: most recent first
     finished.sort((a, b) {
       final aStart = (a.data() as Map)['startTime'] as Timestamp?;
       final bStart = (b.data() as Map)['startTime'] as Timestamp?;

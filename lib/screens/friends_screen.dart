@@ -13,11 +13,14 @@ class FriendsScreen extends StatefulWidget {
 class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProviderStateMixin {
   final _searchController = TextEditingController();
   late TabController _tabController;
+  List<QueryDocumentSnapshot> _allUsers = [];
+  bool _loadingUsers = true;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _loadUsers();
   }
 
   @override
@@ -25,6 +28,21 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
     _tabController.dispose();
     _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadUsers() async {
+    try {
+      final snap = await FirebaseFirestore.instance.collection('users').get();
+      if (mounted) {
+        setState(() {
+          _allUsers = snap.docs;
+          _loadingUsers = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Load users error: $e');
+      if (mounted) setState(() => _loadingUsers = false);
+    }
   }
 
   Future<void> _sendRequest(String toUid) async {
@@ -97,37 +115,41 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
                 ),
               ),
               Expanded(
-                child: StreamBuilder<QuerySnapshot>(
-                  stream: FirebaseFirestore.instance.collection('users').snapshots(),
-                  builder: (context, snap) {
-                    if (!snap.hasData) return const Center(child: CircularProgressIndicator(color: Colors.cyan));
-                    final query = _searchController.text.toLowerCase();
-                    final users = snap.data!.docs.where((d) {
-                      final name = (d.data() as Map)['username']?.toString().toLowerCase() ?? '';
-                      return name.contains(query) && d.id != me;
-                    }).toList();
+                child: _loadingUsers
+                    ? const Center(child: CircularProgressIndicator(color: Colors.cyan))
+                    : Builder(builder: (context) {
+                        final query = _searchController.text.toLowerCase().trim();
+                        final users = _allUsers.where((d) {
+                          if (d.id == me) return false;
+                          final name = (d.data() as Map)['username']?.toString().toLowerCase() ?? '';
+                          if (query.isEmpty) return name.isNotEmpty;
+                          return name.contains(query);
+                        }).toList();
 
-                    if (users.isEmpty) return const Center(child: Text('Inga användare', style: TextStyle(color: Colors.white38)));
+                        if (users.isEmpty) {
+                          return const Center(child: Text('Inga användare hittades', style: TextStyle(color: Colors.white38)));
+                        }
 
-                    return ListView.builder(
-                      itemCount: users.length,
-                      itemBuilder: (context, i) {
-                        final data = users[i].data() as Map;
-                        return AnimatedContainer(
-                          duration: const Duration(milliseconds: 300),
-                          child: ListTile(
-                            leading: const CircleAvatar(backgroundColor: Colors.cyan, child: Icon(Icons.person, color: Colors.black)),
-                            title: Text(data['username'] ?? 'Okänd', style: const TextStyle(color: Colors.white)),
-                            trailing: IconButton(
-                              icon: const Icon(Icons.person_add, color: Colors.cyan),
-                              onPressed: () => _sendRequest(users[i].id),
-                            ),
-                          ),
+                        return ListView.builder(
+                          itemCount: users.length,
+                          itemBuilder: (context, i) {
+                            final data = users[i].data() as Map;
+                            final photoUrl = data['photoUrl'] as String?;
+                            return ListTile(
+                              leading: CircleAvatar(
+                                backgroundColor: Colors.cyan,
+                                backgroundImage: photoUrl != null && photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
+                                child: photoUrl == null || photoUrl.isEmpty ? const Icon(Icons.person, color: Colors.black) : null,
+                              ),
+                              title: Text(data['username'] ?? 'Okänd', style: const TextStyle(color: Colors.white)),
+                              trailing: IconButton(
+                                icon: const Icon(Icons.person_add, color: Colors.cyan),
+                                onPressed: () => _sendRequest(users[i].id),
+                              ),
+                            );
+                          },
                         );
-                      },
-                    );
-                  },
-                ),
+                      }),
               ),
             ],
           ),
@@ -184,8 +206,13 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
                     builder: (context, userSnap) {
                       final data = userSnap.data?.data() as Map? ?? {};
                       final name = data['username'] ?? 'Okänd';
+                      final photoUrl = data['photoUrl'] as String?;
                       return ListTile(
-                        leading: const CircleAvatar(backgroundColor: Colors.cyan, child: Icon(Icons.person, color: Colors.black)),
+                        leading: CircleAvatar(
+                          backgroundColor: Colors.cyan,
+                          backgroundImage: photoUrl != null && photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
+                          child: photoUrl == null || photoUrl.isEmpty ? const Icon(Icons.person, color: Colors.black) : null,
+                        ),
                         title: Text(name.toString(), style: const TextStyle(color: Colors.white)),
                         trailing: IconButton(
                           icon: const Icon(Icons.chat_bubble_outline, color: Colors.cyan),
