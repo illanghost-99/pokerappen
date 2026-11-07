@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import 'firebase_options.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
+import 'services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -14,6 +15,8 @@ void main() async {
     url: 'https://aomyrjehryeouplkzhwi.supabase.co',
     anonKey: 'sb_publishable_QpQkSsT4dp0CkfyS0qVwKg_1mIQ-f5D',
   );
+
+  await NotificationService.init();
 
   runApp(const PokerNightApp());
 }
