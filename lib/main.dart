@@ -16,9 +16,10 @@ void main() async {
     anonKey: 'sb_publishable_QpQkSsT4dp0CkfyS0qVwKg_1mIQ-f5D',
   );
 
-  await NotificationService.init();
-
   runApp(const PokerNightApp());
+
+  // Init notifications after app starts so it doesn't block
+  NotificationService.init();
 }
 
 class PokerNightApp extends StatelessWidget {
