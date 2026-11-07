@@ -95,7 +95,6 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
       body: TabBarView(
         controller: _tabController,
         children: [
-          // Search tab
           Column(
             children: [
               Padding(
@@ -121,13 +120,25 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
                         final query = _searchController.text.toLowerCase().trim();
                         final users = _allUsers.where((d) {
                           if (d.id == me) return false;
-                          final name = (d.data() as Map)['username']?.toString().toLowerCase() ?? '';
-                          if (query.isEmpty) return name.isNotEmpty;
+                          final data = d.data() as Map? ?? {};
+                          final name = (data['username'] as String?)?.toLowerCase() ?? '';
+                          final hasSet = data['hasSetUsername'] == true;
+                          if (!hasSet || name.isEmpty) return false;
+                          if (query.isEmpty) return true;
                           return name.contains(query);
                         }).toList();
 
                         if (users.isEmpty) {
-                          return const Center(child: Text('Inga användare hittades', style: TextStyle(color: Colors.white38)));
+                          return Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Text('Inga användare hittades', style: TextStyle(color: Colors.white38)),
+                                const SizedBox(height: 8),
+                                Text('${_allUsers.length} användare totalt', style: const TextStyle(color: Colors.white24, fontSize: 12)),
+                              ],
+                            ),
+                          );
                         }
 
                         return ListView.builder(
@@ -154,7 +165,6 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
             ],
           ),
 
-          // Requests tab
           StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
                 .collection('friendRequests')
@@ -189,7 +199,6 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
             },
           ),
 
-          // Friends tab
           StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance.collection('users').doc(me).collection('friends').snapshots(),
             builder: (context, snap) {
