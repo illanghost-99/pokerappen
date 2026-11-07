@@ -18,6 +18,7 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
   TimeOfDay _selectedTime = const TimeOfDay(hour: 19, minute: 0);
   String _currency = 'SEK';
   String _type = 'Cash Game';
+  bool _creating = false;
 
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
@@ -38,6 +39,8 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
   }
 
   Future<void> _create() async {
+    if (_creating) return;
+
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Inte inloggad')));
@@ -49,6 +52,8 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
       return;
     }
 
+    setState(() => _creating = true);
+
     final start = DateTime(
       _selectedDate.year,
       _selectedDate.month,
@@ -57,28 +62,37 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
       _selectedTime.minute,
     );
 
-    final ref = await FirebaseFirestore.instance.collection('sessions').add({
-      'name': _nameController.text.trim(),
-      'address': _addressController.text.trim(),
-      'currency': _currency,
-      'type': _type,
-      'startTime': Timestamp.fromDate(start),
-      'ownerId': uid,
-      'players': {uid: true},
-      'buyIns': [],
-      'events': [],
-      'createdAt': FieldValue.serverTimestamp(),
-    });
+    try {
+      final ref = await FirebaseFirestore.instance.collection('sessions').add({
+        'name': _nameController.text.trim(),
+        'address': _addressController.text.trim(),
+        'currency': _currency,
+        'type': _type,
+        'startTime': Timestamp.fromDate(start),
+        'ownerId': uid,
+        'players': {uid: true},
+        'buyIns': [],
+        'events': [],
+        'createdAt': FieldValue.serverTimestamp(),
+      });
 
-    await NotificationService.scheduleSessionReminders(
-      sessionId: ref.id,
-      sessionName: _nameController.text.trim(),
-      startTime: start,
-    );
+      await NotificationService.scheduleSessionReminders(
+        sessionId: ref.id,
+        sessionName: _nameController.text.trim(),
+        startTime: start,
+      );
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Session skapad'), duration: Duration(seconds: 1)));
-      Navigator.pop(context);
+      if (mounted) {
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      debugPrint('Create session error: $e');
+      if (mounted) {
+        setState(() => _creating = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Kunde inte skapa session'), backgroundColor: Colors.red),
+        );
+      }
     }
   }
 
@@ -173,12 +187,14 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: _create,
+                onPressed: _creating ? null : _create,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.cyan,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
-                child: const Text('Skapa session', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                child: _creating
+                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                    : const Text('Skapa session', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
               ),
             ),
           ],

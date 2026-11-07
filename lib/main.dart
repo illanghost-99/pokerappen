@@ -17,9 +17,6 @@ void main() async {
   );
 
   runApp(const PokerNightApp());
-
-  // Init notifications after app starts so it doesn't block
-  NotificationService.init();
 }
 
 class PokerNightApp extends StatelessWidget {
@@ -44,6 +41,7 @@ class PokerNightApp extends StatelessWidget {
             );
           }
           if (snapshot.hasData) {
+            NotificationService.init();
             return const HomeScreen();
           }
           return const LoginScreen();
