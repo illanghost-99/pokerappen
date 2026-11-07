@@ -26,6 +26,7 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
 
     await FirebaseFirestore.instance.collection('users').doc(uid).set({
       'username': name,
+      'hasSetUsername': true,
       'createdAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
 

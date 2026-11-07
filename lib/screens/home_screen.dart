@@ -40,9 +40,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
     try {
       final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
-      final username = doc.data()?['username'] as String?;
+      final data = doc.data();
+      final username = data?['username'] as String?;
+      final hasSetUsername = data?['hasSetUsername'] == true;
 
-      if (!doc.exists || username == null || username.trim().isEmpty) {
+      // Force setup if user hasn't explicitly set a username through our screen
+      if (!doc.exists || !hasSetUsername || username == null || username.trim().isEmpty) {
         if (mounted) {
           await Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => const UsernameSetupScreen(), fullscreenDialog: true),
