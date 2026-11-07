@@ -5,6 +5,7 @@ import 'dart:async';
 import '../widgets/countdown_widget.dart';
 import '../widgets/poker_table_widget.dart';
 import 'summary_screen.dart';
+import '../services/notification_service.dart';
 
 class SessionDetailScreen extends StatefulWidget {
   final String sessionId;
@@ -218,6 +219,14 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
       'events': FieldValue.arrayUnion([{'type': type, 'userId': playerId, 'playerName': playerName, 'amount': amount, 'time': DateTime.now().toIso8601String()}]),
     });
 
+    if (type == 'rebuy') {
+      await NotificationService.notifyRebuy(
+        sessionId: widget.sessionId,
+        playerName: playerName,
+        amount: amount,
+      );
+    }
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -262,6 +271,11 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     });
 
     _timer?.cancel();
+
+    await NotificationService.notifySessionEnded(
+      sessionId: widget.sessionId,
+      sessionName: widget.data['name'] ?? 'Session',
+    );
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -468,21 +482,6 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                 ),
               ),
             ),
-
-            if (!started) ...[
-              const SizedBox(height: 32),
-              Center(
-                child: Column(
-                  children: [
-                    const Icon(Icons.lock_outline, color: Colors.white38, size: 40),
-                    const SizedBox(height: 12),
-                    const Text('Sessionen har inte börjat ännu', style: TextStyle(color: Colors.white70, fontSize: 16)),
-                    const SizedBox(height: 6),
-                    const Text('Bordet och inköp låses upp när tiden är inne', style: TextStyle(color: Colors.white38, fontSize: 14)),
-                  ],
-                ),
-              ),
-            ],
           ],
         ),
       ),
