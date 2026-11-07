@@ -17,6 +17,7 @@ class SessionDetailScreen extends StatefulWidget {
 }
 
 class _SessionDetailScreenState extends State<SessionDetailScreen> {
+  List<String> _playerIds = [];
   List<String> _playerNames = [];
   List<String?> _playerPhotoUrls = [];
   Timer? _timer;
@@ -87,7 +88,8 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   }
 
   Future<void> _loadPlayerDetails() async {
-    final playerIds = (widget.data['players'] as Map?)?.keys.toList() ?? [];
+    final session = await FirebaseFirestore.instance.collection('sessions').doc(widget.sessionId).get();
+    final playerIds = (session.data()?['players'] as Map?)?.keys.toList() ?? [];
     final names = <String>[];
     final photos = <String?>[];
 
@@ -109,9 +111,99 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
 
     if (mounted) {
       setState(() {
+        _playerIds = playerIds.cast<String>();
         _playerNames = names;
         _playerPhotoUrls = photos;
       });
+    }
+  }
+
+  Future<void> _addPlayer() async {
+    final controller = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (c) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A1A),
+        title: const Text('Lägg till spelare', style: TextStyle(color: Colors.white)),
+        content: TextField(
+          controller: controller,
+          style: const TextStyle(color: Colors.white),
+          decoration: const InputDecoration(
+            hintText: 'Användarnamn',
+            hintStyle: TextStyle(color: Colors.white38),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c), child: const Text('Avbryt')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(c, controller.text.trim()),
+            child: const Text('Lägg till'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == null || result.isEmpty) return;
+
+    final users = await FirebaseFirestore.instance
+        .collection('users')
+        .where('username', isEqualTo: result)
+        .limit(1)
+        .get();
+
+    if (users.docs.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Användare hittades inte'), backgroundColor: Colors.red),
+        );
+      }
+      return;
+    }
+
+    final uid = users.docs.first.id;
+    await FirebaseFirestore.instance.collection('sessions').doc(widget.sessionId).update({
+      'players.$uid': true,
+    });
+
+    await _loadPlayerDetails();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$result tillagd'), backgroundColor: Colors.green),
+      );
+    }
+  }
+
+  Future<void> _removePlayer(String uid, String name) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A1A),
+        title: const Text('Ta bort spelare?', style: TextStyle(color: Colors.white)),
+        content: Text('$name tas bort och får inga notiser.', style: const TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Avbryt')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(c, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Ta bort'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    await FirebaseFirestore.instance.collection('sessions').doc(widget.sessionId).update({
+      'players.$uid': FieldValue.delete(),
+    });
+
+    await _loadPlayerDetails();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$name borttagen'), backgroundColor: Colors.orange),
+      );
     }
   }
 
@@ -332,6 +424,11 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
         title: Text(widget.data['name'] ?? 'Session', style: const TextStyle(color: Colors.white)),
         actions: [
           if (isAdmin) ...[
+            IconButton(
+              icon: const Icon(Icons.person_add, color: Colors.cyan),
+              tooltip: 'Lägg till spelare',
+              onPressed: _addPlayer,
+            ),
             if (isLive)
               IconButton(
                 icon: const Icon(Icons.stop_circle_outlined, color: Colors.orange),
@@ -358,6 +455,30 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
             const SizedBox(height: 8),
             Text('${widget.data['type'] ?? ''} • ${widget.data['currency'] ?? ''}', style: const TextStyle(color: Colors.cyan)),
             const SizedBox(height: 20),
+
+            if (isAdmin && _playerIds.isNotEmpty) ...[
+              const Text('Spelare', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              ...List.generate(_playerIds.length, (i) {
+                final isOwner = _playerIds[i] == widget.data['ownerId'];
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(color: const Color(0xFF1A1A1A), borderRadius: BorderRadius.circular(10)),
+                  child: Row(
+                    children: [
+                      Expanded(child: Text(_playerNames[i], style: const TextStyle(color: Colors.white))),
+                      if (!isOwner)
+                        IconButton(
+                          icon: const Icon(Icons.remove_circle, color: Colors.red, size: 20),
+                          onPressed: () => _removePlayer(_playerIds[i], _playerNames[i]),
+                        ),
+                    ],
+                  ),
+                );
+              }),
+              const SizedBox(height: 16),
+            ],
 
             if (isLive)
               Container(
