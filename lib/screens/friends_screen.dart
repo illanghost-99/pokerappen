@@ -15,6 +15,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
   late TabController _tabController;
   List<QueryDocumentSnapshot> _allUsers = [];
   bool _loadingUsers = true;
+  bool _showDebug = true; // Debug mode - visa alla
 
   @override
   void initState() {
@@ -113,6 +114,21 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
                   onChanged: (_) => setState(() {}),
                 ),
               ),
+              // Debug toggle
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    const Text('Visa alla (debug)', style: TextStyle(color: Colors.orange, fontSize: 12)),
+                    const Spacer(),
+                    Switch(
+                      value: _showDebug,
+                      onChanged: (v) => setState(() => _showDebug = v),
+                      activeColor: Colors.orange,
+                    ),
+                  ],
+                ),
+              ),
               Expanded(
                 child: _loadingUsers
                     ? const Center(child: CircularProgressIndicator(color: Colors.cyan))
@@ -123,6 +139,14 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
                           final data = d.data() as Map? ?? {};
                           final name = (data['username'] as String?)?.toLowerCase() ?? '';
                           final hasSet = data['hasSetUsername'] == true;
+
+                          // Debug mode: visa alla
+                          if (_showDebug) {
+                            if (query.isEmpty) return true;
+                            return name.contains(query) || d.id.toLowerCase().contains(query);
+                          }
+
+                          // Normal mode
                           if (!hasSet || name.isEmpty) return false;
                           if (query.isEmpty) return true;
                           return name.contains(query);
@@ -144,15 +168,21 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
                         return ListView.builder(
                           itemCount: users.length,
                           itemBuilder: (context, i) {
-                            final data = users[i].data() as Map;
+                            final data = users[i].data() as Map? ?? {};
                             final photoUrl = data['photoUrl'] as String?;
+                            final username = data['username'] as String? ?? '(inget namn)';
+                            final hasSet = data['hasSetUsername'] == true;
                             return ListTile(
                               leading: CircleAvatar(
-                                backgroundColor: Colors.cyan,
+                                backgroundColor: hasSet ? Colors.cyan : Colors.grey,
                                 backgroundImage: photoUrl != null && photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
                                 child: photoUrl == null || photoUrl.isEmpty ? const Icon(Icons.person, color: Colors.black) : null,
                               ),
-                              title: Text(data['username'] ?? 'Okänd', style: const TextStyle(color: Colors.white)),
+                              title: Text(username, style: const TextStyle(color: Colors.white)),
+                              subtitle: Text(
+                                'hasSet: $hasSet | ID: ${users[i].id.substring(0, 8)}...',
+                                style: const TextStyle(color: Colors.white38, fontSize: 11),
+                              ),
                               trailing: IconButton(
                                 icon: const Icon(Icons.person_add, color: Colors.cyan),
                                 onPressed: () => _sendRequest(users[i].id),
