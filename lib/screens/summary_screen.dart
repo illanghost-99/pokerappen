@@ -18,65 +18,105 @@ class SummaryScreen extends StatelessWidget {
         builder: (context, snap) {
           if (!snap.hasData) return const Center(child: CircularProgressIndicator(color: Colors.cyan));
           final data = snap.data!.data() as Map<String, dynamic>? ?? {};
-          final buyIns = data['buyIns'] as List? ?? [];
-          final total = buyIns.fold<double>(0, (sum, b) => sum + ((b as Map)['amount'] as num? ?? 0));
-          final rebuys = buyIns.where((b) => (b as Map)['type'] == 'rebuy').length;
+          final events = data['events'] as List? ?? [];
+          final players = data['players'] as Map? ?? {};
+          final start = (data['startTime'] as Timestamp?)?.toDate();
+          final endedAt = (data['endedAt'] as Timestamp?)?.toDate();
 
-          return Padding(
+          double total = 0;
+          int rebuys = 0;
+          final perPlayer = <String, double>{};
+
+          for (final e in events) {
+            final m = e as Map;
+            final amount = (m['amount'] as num?)?.toDouble() ?? 0;
+            final name = m['playerName'] ?? 'Okänd';
+            total += amount;
+            if (m['type'] == 'rebuy') rebuys++;
+            perPlayer[name] = (perPlayer[name] ?? 0) + amount;
+          }
+
+          final duration = (start != null && endedAt != null)
+              ? endedAt.difference(start)
+              : null;
+
+          return ListView(
             padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1A1A1A),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Column(
-                    children: [
-                      Text('Total pott', style: TextStyle(color: Colors.white54)),
-                      Text('$total ${data['currency'] ?? ''}', style: const TextStyle(fontSize: 32, color: Colors.cyan, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 12),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: [
-                          _stat('Buy-ins', '${buyIns.length - rebuys}'),
-                          _stat('Rebuys', '$rebuys'),
-                          _stat('Spelare', '${(data['players'] as Map?)?.length ?? 0}'),
-                        ],
-                      ),
-                    ],
-                  ),
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1A1A1A),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.cyan.withOpacity(0.3)),
                 ),
-                const SizedBox(height: 24),
-                const Text('Alla inköp', style: TextStyle(fontSize: 18, color: Colors.white)),
-                Expanded(
-                  child: ListView.builder(
-                    itemCount: buyIns.length,
-                    itemBuilder: (_, i) {
-                      final b = buyIns[i] as Map;
-                      return ListTile(
-                        title: Text('${b['amount']} • ${b['type']}', style: const TextStyle(color: Colors.white)),
-                        subtitle: Text(b['userId']?.toString() ?? '', style: const TextStyle(color: Colors.white38, fontSize: 12)),
-                      );
-                    },
-                  ),
-                ),
-                Row(
+                child: Column(
                   children: [
-                    Expanded(child: ElevatedButton(onPressed: () {}, child: const Text('PDF'))),
-                    const SizedBox(width: 8),
-                    Expanded(child: ElevatedButton(onPressed: () {}, child: const Text('CSV'))),
+                    const Text('TOTAL POTT', style: TextStyle(color: Colors.white54, letterSpacing: 1.5)),
+                    const SizedBox(height: 4),
+                    Text('${total.toStringAsFixed(0)} SEK', style: const TextStyle(fontSize: 36, color: Colors.cyan, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _stat('Buy-ins', '${events.length - rebuys}'),
+                        _stat('Rebuys', '$rebuys'),
+                        _stat('Spelare', '${players.length}'),
+                      ],
+                    ),
+                    if (duration != null) ...[
+                      const SizedBox(height: 12),
+                      Text('Speltid: ${_formatDuration(duration)}', style: const TextStyle(color: Colors.white70)),
+                    ],
+                    if (start != null)
+                      Text('Start: ${_formatTime(start)}', style: const TextStyle(color: Colors.white54, fontSize: 13)),
+                    if (endedAt != null)
+                      Text('Slut: ${_formatTime(endedAt)}', style: const TextStyle(color: Colors.white54, fontSize: 13)),
                   ],
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 24),
+              const Text('Per spelare', style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              ...perPlayer.entries.map((e) => Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(color: const Color(0xFF1A1A1A), borderRadius: BorderRadius.circular(12)),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(e.key, style: const TextStyle(color: Colors.white)),
+                    Text('${e.value.toStringAsFixed(0)} SEK', style: const TextStyle(color: Colors.cyan, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              )),
+              const SizedBox(height: 24),
+              const Text('Alla händelser', style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              ...events.reversed.map((e) {
+                final m = e as Map;
+                final type = m['type'] == 'rebuy' ? 'Rebuy' : 'Buy-in';
+                return ListTile(
+                  dense: true,
+                  leading: Icon(m['type'] == 'rebuy' ? Icons.refresh : Icons.add_circle, color: Colors.cyan, size: 18),
+                  title: Text('$type – ${m['amount']} SEK', style: const TextStyle(color: Colors.white)),
+                  subtitle: Text(m['playerName'] ?? '', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                );
+              }),
+            ],
           );
         },
       ),
     );
   }
+
+  String _formatDuration(Duration d) {
+    final h = d.inHours;
+    final m = d.inMinutes % 60;
+    return '${h}h ${m}m';
+  }
+
+  String _formatTime(DateTime t) => '${t.day}/${t.month} ${t.hour}:${t.minute.toString().padLeft(2, '0')}';
 
   Widget _stat(String label, String value) {
     return Column(
