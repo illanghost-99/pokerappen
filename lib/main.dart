@@ -31,6 +31,15 @@ class PokerNightApp extends StatelessWidget {
         scaffoldBackgroundColor: Colors.black,
         colorScheme: const ColorScheme.dark(primary: Colors.cyan),
       ),
+      builder: (context, child) {
+        return GestureDetector(
+          onTap: () {
+            FocusScope.of(context).unfocus();
+          },
+          behavior: HitTestBehavior.opaque,
+          child: child,
+        );
+      },
       home: StreamBuilder<User?>(
         stream: FirebaseAuth.instance.authStateChanges(),
         builder: (context, snapshot) {
