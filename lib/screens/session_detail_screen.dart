@@ -53,52 +53,42 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
       final events = data['events'] as List? ?? [];
       final ended = data['ended'] == true || data['status'] == 'ended';
 
-      // If session is ended, calculate final duration and stop timer
       if (ended) {
         _timer?.cancel();
         if (!_isEnded) {
           setState(() => _isEnded = true);
         }
 
-        // Calculate duration from first event to endedAt
         if (events.isNotEmpty) {
           DateTime? earliest;
+          DateTime? latest;
           for (final e in events) {
             final t = DateTime.tryParse(e['time'] ?? '');
-            if (t != null && (earliest == null || t.isBefore(earliest))) {
-              earliest = t;
+            if (t != null) {
+              if (earliest == null || t.isBefore(earliest)) {
+                earliest = t;
+              }
+              if (latest == null || t.isAfter(latest)) {
+                latest = t;
+              }
             }
           }
 
           final endedAt = (data['endedAt'] as Timestamp?)?.toDate();
-          if (earliest != null && endedAt != null) {
+          final startTime = earliest;
+          final endTime = endedAt ?? latest;
+
+          if (startTime != null && endTime != null) {
             setState(() {
-              _sessionStartedAt = earliest;
-              _sessionEndedAt = endedAt;
-              _elapsed = endedAt.difference(earliest);
+              _sessionStartedAt = startTime;
+              _sessionEndedAt = endTime;
+              _elapsed = endTime.difference(startTime);
             });
-          } else if (earliest != null) {
-            // Fallback: use last event time
-            DateTime? latest;
-            for (final e in events) {
-              final t = DateTime.tryParse(e['time'] ?? '');
-              if (t != null && (latest == null || t.isAfter(latest))) {
-                latest = t;
-              }
-            }
-            if (latest != null) {
-              setState(() {
-                _sessionStartedAt = earliest;
-                _sessionEndedAt = latest;
-                _elapsed = latest.difference(earliest);
-              });
-            }
           }
         }
         return;
       }
 
-      // Session is live - start timer
       if (events.isNotEmpty && _sessionStartedAt == null) {
         DateTime? earliest;
         for (final e in events) {
@@ -107,10 +97,11 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
             earliest = t;
           }
         }
-        if (earliest != null) {
+        final startTime = earliest;
+        if (startTime != null) {
           setState(() {
-            _sessionStartedAt = earliest;
-            _elapsed = DateTime.now().difference(earliest);
+            _sessionStartedAt = startTime;
+            _elapsed = DateTime.now().difference(startTime);
           });
           _startCountUp();
         }
@@ -122,9 +113,10 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     if (_isEnded) return;
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (_sessionStartedAt != null && mounted && !_isEnded) {
+      final start = _sessionStartedAt;
+      if (start != null && mounted && !_isEnded) {
         setState(() {
-          _elapsed = DateTime.now().difference(_sessionStartedAt!);
+          _elapsed = DateTime.now().difference(start);
         });
       }
     });
@@ -445,7 +437,6 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
 
     if (confirm != true || !mounted) return;
 
-    // Stop timer immediately
     _timer?.cancel();
     final finalDuration = _elapsed;
 
