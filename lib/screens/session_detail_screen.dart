@@ -118,58 +118,101 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     }
   }
 
-  Future<void> _addPlayer() async {
-    final controller = TextEditingController();
-    final result = await showDialog<String>(
-      context: context,
-      builder: (c) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1A1A),
-        title: const Text('Lägg till spelare', style: TextStyle(color: Colors.white)),
-        content: TextField(
-          controller: controller,
-          style: const TextStyle(color: Colors.white),
-          decoration: const InputDecoration(
-            hintText: 'Användarnamn',
-            hintStyle: TextStyle(color: Colors.white38),
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(c), child: const Text('Avbryt')),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(c, controller.text.trim()),
-            child: const Text('Lägg till'),
-          ),
-        ],
-      ),
-    );
+  Future<void> _addPlayerFromFriends() async {
+    final me = FirebaseAuth.instance.currentUser?.uid;
+    if (me == null) return;
 
-    if (result == null || result.isEmpty) return;
-
-    final users = await FirebaseFirestore.instance
+    // Load friends
+    final friendsSnap = await FirebaseFirestore.instance
         .collection('users')
-        .where('username', isEqualTo: result)
-        .limit(1)
+        .doc(me)
+        .collection('friends')
         .get();
 
-    if (users.docs.isEmpty) {
+    if (friendsSnap.docs.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Användare hittades inte'), backgroundColor: Colors.red),
+          const SnackBar(content: Text('Du har inga vänner att lägga till'), backgroundColor: Colors.orange),
         );
       }
       return;
     }
 
-    final uid = users.docs.first.id;
+    // Load friend details
+    final friends = <Map<String, dynamic>>[];
+    for (final f in friendsSnap.docs) {
+      final userDoc = await FirebaseFirestore.instance.collection('users').doc(f.id).get();
+      if (userDoc.exists) {
+        final data = userDoc.data() ?? {};
+        friends.add({
+          'uid': f.id,
+          'username': data['username'] ?? 'Okänd',
+          'photoUrl': data['photoUrl'],
+        });
+      }
+    }
+
+    if (!mounted) return;
+
+    // Show friends picker
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: const Color(0xFF1A1A1A),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (c) {
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2))),
+            const SizedBox(height: 16),
+            const Text('Välj vän att lägga till', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 16),
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: friends.length,
+                itemBuilder: (context, i) {
+                  final f = friends[i];
+                  final alreadyAdded = _playerIds.contains(f['uid']);
+                  final photoUrl = f['photoUrl'] as String?;
+
+                  return ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: Colors.cyan,
+                      backgroundImage: photoUrl != null && photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
+                      child: photoUrl == null || photoUrl.isEmpty ? const Icon(Icons.person, color: Colors.black) : null,
+                    ),
+                    title: Text(f['username'], style: const TextStyle(color: Colors.white)),
+                    trailing: alreadyAdded
+                        ? const Icon(Icons.check, color: Colors.green)
+                        : const Icon(Icons.add, color: Colors.cyan),
+                    onTap: alreadyAdded ? null : () => Navigator.pop(c, f['uid']),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+        );
+      },
+    );
+
+    if (selected == null) return;
+
+    // Add player to session
     await FirebaseFirestore.instance.collection('sessions').doc(widget.sessionId).update({
-      'players.$uid': true,
+      'players.$selected': true,
     });
 
     await _loadPlayerDetails();
 
     if (mounted) {
+      final name = friends.firstWhere((f) => f['uid'] == selected)['username'];
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$result tillagd'), backgroundColor: Colors.green),
+        SnackBar(content: Text('$name tillagd'), backgroundColor: Colors.green),
       );
     }
   }
@@ -427,7 +470,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
             IconButton(
               icon: const Icon(Icons.person_add, color: Colors.cyan),
               tooltip: 'Lägg till spelare',
-              onPressed: _addPlayer,
+              onPressed: _addPlayerFromFriends,
             ),
             if (isLive)
               IconButton(
@@ -511,7 +554,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                           children: [
                             const Divider(color: Colors.white12),
                             const SizedBox(height: 8),
-                            const Text('VÄRDE I BORDET', style: TextStyle(color: Colors.amber, fontSize: 12, letterSpacing: 1.5)),
+                            const Text('VÄRDE I BORDET', style: TextStyle(color: Colors.cyan, fontSize: 12, letterSpacing: 2)),
                             const SizedBox(height: 4),
                             Text(
                               '${total.toStringAsFixed(0)} SEK',
@@ -527,82 +570,32 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
             else
               CountdownWidget(target: start),
 
-            const SizedBox(height: 28),
+            const SizedBox(height: 24),
 
-            Opacity(
-              opacity: started ? 1.0 : 0.35,
-              child: IgnorePointer(
-                ignoring: !started,
-                child: Column(
-                  children: [
-                    Center(
-                      child: PokerTableWidget(
-                        playerCount: _playerNames.length,
-                        playerNames: _playerNames,
-                        playerPhotoUrls: _playerPhotoUrls,
-                        isAdmin: isAdmin && started,
-                        onPlayerTap: _addBuyInForPlayer,
-                      ),
-                    ),
-                    const SizedBox(height: 28),
-
-                    const Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text('Historik', style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.w600)),
-                    ),
-                    const SizedBox(height: 8),
-                    StreamBuilder<DocumentSnapshot>(
-                      stream: FirebaseFirestore.instance.collection('sessions').doc(widget.sessionId).snapshots(),
-                      builder: (context, snap) {
-                        if (!snap.hasData || !snap.data!.exists) {
-                          return const Text('Sessionen finns inte längre', style: TextStyle(color: Colors.white38));
-                        }
-                        final events = (snap.data!.data() as Map<String, dynamic>?)?['events'] as List? ?? [];
-                        if (events.isEmpty) {
-                          return const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 16),
-                            child: Text('Inga inköp ännu', style: TextStyle(color: Colors.white38)),
-                          );
-                        }
-                        return Column(
-                          children: events.reversed.map<Widget>((e) {
-                            final m = e as Map;
-                            final name = m['playerName'] ?? 'Okänd';
-                            final amount = m['amount'] ?? 0;
-                            final type = m['type'] == 'rebuy' ? 'Rebuy' : 'Buy-in';
-                            final time = m['time'] ?? '';
-                            return Container(
-                              margin: const EdgeInsets.only(bottom: 8),
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF1A1A1A),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(type == 'Rebuy' ? Icons.refresh : Icons.add_circle, color: Colors.cyan, size: 20),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text('$type – $amount SEK', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
-                                        Text(name, style: const TextStyle(color: Colors.white54, fontSize: 13)),
-                                      ],
-                                    ),
-                                  ),
-                                  Text(time.length > 16 ? time.substring(11, 16) : time, style: const TextStyle(color: Colors.white38, fontSize: 12)),
-                                ],
-                              ),
-                            );
-                          }).toList(),
-                        );
-                      },
-                    ),
-                  ],
-                ),
+            Center(
+              child: PokerTableWidget(
+                playerNames: _playerNames,
+                playerPhotoUrls: _playerPhotoUrls,
+                onPlayerTap: isAdmin && started ? (i) => _addBuyInForPlayer(_playerIds[i], _playerNames[i]) : null,
               ),
             ),
+
+            const SizedBox(height: 24),
+
+            if (!started)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1A1A1A),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Text(
+                  'Sessionen har inte börjat än. Buy-ins låses upp när tiden är inne.',
+                  style: TextStyle(color: Colors.white54),
+                  textAlign: TextAlign.center,
+                ),
+              ),
           ],
         ),
       ),
