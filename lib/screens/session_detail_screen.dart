@@ -23,6 +23,8 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   Timer? _timer;
   Duration _elapsed = Duration.zero;
   DateTime? _sessionStartedAt;
+  DateTime? _sessionEndedAt;
+  bool _isEnded = false;
 
   bool get _hasStarted {
     final start = (widget.data['startTime'] as Timestamp?)?.toDate();
@@ -33,6 +35,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   @override
   void initState() {
     super.initState();
+    _isEnded = widget.data['ended'] == true || widget.data['status'] == 'ended';
     _loadPlayerDetails();
     _listenForSessionStart();
   }
@@ -48,9 +51,55 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
       if (!snap.exists || !mounted) return;
       final data = snap.data()!;
       final events = data['events'] as List? ?? [];
-      final ended = data['ended'] == true;
+      final ended = data['ended'] == true || data['status'] == 'ended';
 
-      if (!ended && events.isNotEmpty && _sessionStartedAt == null) {
+      // If session is ended, calculate final duration and stop timer
+      if (ended) {
+        _timer?.cancel();
+        if (!_isEnded) {
+          setState(() => _isEnded = true);
+        }
+
+        // Calculate duration from first event to endedAt
+        if (events.isNotEmpty) {
+          DateTime? earliest;
+          for (final e in events) {
+            final t = DateTime.tryParse(e['time'] ?? '');
+            if (t != null && (earliest == null || t.isBefore(earliest))) {
+              earliest = t;
+            }
+          }
+
+          final endedAt = (data['endedAt'] as Timestamp?)?.toDate();
+          if (earliest != null && endedAt != null) {
+            setState(() {
+              _sessionStartedAt = earliest;
+              _sessionEndedAt = endedAt;
+              _elapsed = endedAt.difference(earliest);
+            });
+          } else if (earliest != null) {
+            // Fallback: use last event time
+            DateTime? latest;
+            for (final e in events) {
+              final t = DateTime.tryParse(e['time'] ?? '');
+              if (t != null && (latest == null || t.isAfter(latest))) {
+                latest = t;
+              }
+            }
+            if (latest != null) {
+              setState(() {
+                _sessionStartedAt = earliest;
+                _sessionEndedAt = latest;
+                _elapsed = latest.difference(earliest);
+              });
+            }
+          }
+        }
+        return;
+      }
+
+      // Session is live - start timer
+      if (events.isNotEmpty && _sessionStartedAt == null) {
         DateTime? earliest;
         for (final e in events) {
           final t = DateTime.tryParse(e['time'] ?? '');
@@ -61,7 +110,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
         if (earliest != null) {
           setState(() {
             _sessionStartedAt = earliest;
-            _elapsed = DateTime.now().difference(earliest!);
+            _elapsed = DateTime.now().difference(earliest);
           });
           _startCountUp();
         }
@@ -70,9 +119,10 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   }
 
   void _startCountUp() {
+    if (_isEnded) return;
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (_sessionStartedAt != null && mounted) {
+      if (_sessionStartedAt != null && mounted && !_isEnded) {
         setState(() {
           _elapsed = DateTime.now().difference(_sessionStartedAt!);
         });
@@ -247,7 +297,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   }
 
   Future<void> _addBuyInForPlayer(String playerId, String playerName) async {
-    if (!_hasStarted) return;
+    if (!_hasStarted || _isEnded) return;
 
     final amountController = TextEditingController();
     String type = 'buyin';
@@ -395,13 +445,21 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
 
     if (confirm != true || !mounted) return;
 
+    // Stop timer immediately
+    _timer?.cancel();
+    final finalDuration = _elapsed;
+
     await FirebaseFirestore.instance.collection('sessions').doc(widget.sessionId).update({
       'ended': true,
       'status': 'ended',
       'endedAt': FieldValue.serverTimestamp(),
+      'finalDurationSeconds': finalDuration.inSeconds,
     });
 
-    _timer?.cancel();
+    setState(() {
+      _isEnded = true;
+      _sessionEndedAt = DateTime.now();
+    });
 
     await NotificationService.notifySessionEnded(
       sessionId: widget.sessionId,
@@ -454,7 +512,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     final start = (widget.data['startTime'] as Timestamp?)?.toDate() ?? DateTime.now();
     final isAdmin = widget.data['ownerId'] == FirebaseAuth.instance.currentUser?.uid;
     final started = _hasStarted;
-    final isLive = _sessionStartedAt != null;
+    final isLive = _sessionStartedAt != null && !_isEnded;
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -462,7 +520,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
         backgroundColor: Colors.black,
         title: Text(widget.data['name'] ?? 'Session', style: const TextStyle(color: Colors.white)),
         actions: [
-          if (isAdmin) ...[
+          if (isAdmin && !_isEnded) ...[
             IconButton(
               icon: const Icon(Icons.person_add, color: Colors.cyan),
               tooltip: 'Lägg till spelare',
@@ -478,11 +536,12 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
               icon: const Icon(Icons.delete_forever, color: Colors.red),
               onPressed: _deleteSession,
             ),
+          ],
+          if (isAdmin)
             IconButton(
               icon: const Icon(Icons.summarize, color: Colors.cyan),
               onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => SummaryScreen(sessionId: widget.sessionId))),
             ),
-          ],
         ],
       ),
       body: SingleChildScrollView(
@@ -494,6 +553,26 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
             const SizedBox(height: 8),
             Text('${widget.data['type'] ?? ''} • ${widget.data['currency'] ?? ''}', style: const TextStyle(color: Colors.cyan)),
             const SizedBox(height: 20),
+
+            if (_isEnded)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.orange.withOpacity(0.5)),
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.check_circle, color: Colors.orange, size: 20),
+                    SizedBox(width: 8),
+                    Text('SESSION AVSLUTAD', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                  ],
+                ),
+              ),
 
             if (isAdmin && _playerIds.isNotEmpty) ...[
               const Text('Spelare', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
@@ -507,7 +586,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                   child: Row(
                     children: [
                       Expanded(child: Text(_playerNames[i], style: const TextStyle(color: Colors.white))),
-                      if (!isOwner)
+                      if (!isOwner && !_isEnded)
                         IconButton(
                           icon: const Icon(Icons.remove_circle, color: Colors.red, size: 20),
                           onPressed: () => _removePlayer(_playerIds[i], _playerNames[i]),
@@ -519,18 +598,21 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
               const SizedBox(height: 16),
             ],
 
-            if (isLive)
+            if (isLive || _isEnded)
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   color: const Color(0xFF1A1A1A),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.green.withOpacity(0.5)),
+                  border: Border.all(color: _isEnded ? Colors.orange.withOpacity(0.5) : Colors.green.withOpacity(0.5)),
                 ),
                 child: Column(
                   children: [
-                    const Text('SPELTID', style: TextStyle(color: Colors.green, fontSize: 12, letterSpacing: 2)),
+                    Text(
+                      _isEnded ? 'TOTAL SPELTID' : 'SPELTID',
+                      style: TextStyle(color: _isEnded ? Colors.orange : Colors.green, fontSize: 12, letterSpacing: 2),
+                    ),
                     const SizedBox(height: 8),
                     Text(
                       _formatElapsed(_elapsed),
@@ -573,8 +655,8 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                 playerCount: _playerIds.length,
                 playerNames: _playerNames,
                 playerPhotoUrls: _playerPhotoUrls,
-                isAdmin: isAdmin && started,
-                onPlayerTap: isAdmin && started ? (playerId, playerName) {
+                isAdmin: isAdmin && started && !_isEnded,
+                onPlayerTap: isAdmin && started && !_isEnded ? (playerId, playerName) {
                   final index = _playerNames.indexOf(playerName);
                   if (index >= 0 && index < _playerIds.length) {
                     _addBuyInForPlayer(_playerIds[index], playerName);
@@ -585,7 +667,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
 
             const SizedBox(height: 24),
 
-            if (!started)
+            if (!started && !_isEnded)
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
