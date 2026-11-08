@@ -44,7 +44,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       final username = data?['username'] as String?;
       final hasSetUsername = data?['hasSetUsername'] == true;
 
-      // Force setup if user hasn't explicitly set a username through our screen
       if (!doc.exists || !hasSetUsername || username == null || username.trim().isEmpty) {
         if (mounted) {
           await Navigator.of(context).push(
@@ -128,9 +127,42 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           },
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.people_outline, color: Colors.cyan),
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FriendsScreen())),
+          // Friends icon with badge
+          StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('friendRequests')
+                .where('to', isEqualTo: uid)
+                .where('status', isEqualTo: 'pending')
+                .snapshots(),
+            builder: (context, snap) {
+              final count = snap.data?.docs.length ?? 0;
+              return Stack(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.people_outline, color: Colors.cyan),
+                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FriendsScreen())),
+                  ),
+                  if (count > 0)
+                    Positioned(
+                      right: 6,
+                      top: 6,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                        ),
+                        constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                        child: Text(
+                          '$count',
+                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
           ),
           IconButton(
             icon: const Icon(Icons.person_outline, color: Colors.cyan),

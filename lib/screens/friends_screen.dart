@@ -102,37 +102,55 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
     final me = FirebaseAuth.instance.currentUser?.uid;
     if (me == null) return;
 
-    final batch = FirebaseFirestore.instance.batch();
-    batch.update(
-      FirebaseFirestore.instance.collection('friendRequests').doc(requestId),
-      {'status': 'accepted'},
-    );
-    batch.set(
-      FirebaseFirestore.instance.collection('users').doc(me).collection('friends').doc(fromUid),
-      {'addedAt': FieldValue.serverTimestamp()},
-    );
-    batch.set(
-      FirebaseFirestore.instance.collection('users').doc(fromUid).collection('friends').doc(me),
-      {'addedAt': FieldValue.serverTimestamp()},
-    );
-    await batch.commit();
+    try {
+      // Update request status
+      await FirebaseFirestore.instance.collection('friendRequests').doc(requestId).update({
+        'status': 'accepted',
+      });
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Row(
-            children: [
-              Icon(Icons.people, color: Colors.white, size: 18),
-              SizedBox(width: 8),
-              Text('Ni är nu vänner!'),
-            ],
+      // Add friend to MY list
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(me)
+          .collection('friends')
+          .doc(fromUid)
+          .set({'addedAt': FieldValue.serverTimestamp()});
+
+      // Add me to THEIR list (separate write)
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(fromUid)
+          .collection('friends')
+          .doc(me)
+          .set({'addedAt': FieldValue.serverTimestamp()});
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.people, color: Colors.white, size: 18),
+                SizedBox(width: 8),
+                Text('Ni är nu vänner!'),
+              ],
+            ),
+            backgroundColor: Colors.cyan.shade700,
+            duration: const Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
-          backgroundColor: Colors.cyan.shade700,
-          duration: const Duration(seconds: 2),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
+        );
+      }
+    } catch (e) {
+      debugPrint('Accept error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Fel: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -223,43 +241,29 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
                                   final photoUrl = data['photoUrl'] as String?;
                                   final alreadySent = _sentRequests.contains(doc.id);
 
-                                  return TweenAnimationBuilder<double>(
-                                    tween: Tween(begin: 0.0, end: 1.0),
-                                    duration: Duration(milliseconds: 300 + i * 50),
-                                    curve: Curves.easeOutCubic,
-                                    builder: (context, value, child) {
-                                      return Opacity(
-                                        opacity: value,
-                                        child: Transform.translate(
-                                          offset: Offset(0, 20 * (1 - value)),
-                                          child: child,
-                                        ),
-                                      );
-                                    },
-                                    child: Container(
-                                      margin: const EdgeInsets.symmetric(vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFF1A1A1A),
-                                        borderRadius: BorderRadius.circular(12),
+                                  return Container(
+                                    margin: const EdgeInsets.symmetric(vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF1A1A1A),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: ListTile(
+                                      leading: CircleAvatar(
+                                        backgroundColor: Colors.cyan,
+                                        backgroundImage: photoUrl != null && photoUrl.isNotEmpty
+                                            ? NetworkImage(photoUrl)
+                                            : null,
+                                        child: photoUrl == null || photoUrl.isEmpty
+                                            ? const Icon(Icons.person, color: Colors.black)
+                                            : null,
                                       ),
-                                      child: ListTile(
-                                        leading: CircleAvatar(
-                                          backgroundColor: Colors.cyan,
-                                          backgroundImage: photoUrl != null && photoUrl.isNotEmpty
-                                              ? NetworkImage(photoUrl)
-                                              : null,
-                                          child: photoUrl == null || photoUrl.isEmpty
-                                              ? const Icon(Icons.person, color: Colors.black)
-                                              : null,
-                                        ),
-                                        title: Text(username, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
-                                        trailing: alreadySent
-                                            ? const Icon(Icons.check, color: Colors.green)
-                                            : IconButton(
-                                                icon: const Icon(Icons.person_add, color: Colors.cyan),
-                                                onPressed: () => _sendRequest(doc.id, username),
-                                              ),
-                                      ),
+                                      title: Text(username, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+                                      trailing: alreadySent
+                                          ? const Icon(Icons.check, color: Colors.green)
+                                          : IconButton(
+                                              icon: const Icon(Icons.person_add, color: Colors.cyan),
+                                              onPressed: () => _sendRequest(doc.id, username),
+                                            ),
                                     ),
                                   );
                                 },
@@ -307,46 +311,32 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
                       final name = userData['username'] ?? 'Okänd';
                       final photoUrl = userData['photoUrl'] as String?;
 
-                      return TweenAnimationBuilder<double>(
-                        tween: Tween(begin: 0.0, end: 1.0),
-                        duration: Duration(milliseconds: 300 + i * 50),
-                        curve: Curves.easeOutCubic,
-                        builder: (context, value, child) {
-                          return Opacity(
-                            opacity: value,
-                            child: Transform.translate(
-                              offset: Offset(0, 15 * (1 - value)),
-                              child: child,
-                            ),
-                          );
-                        },
-                        child: Container(
-                          margin: const EdgeInsets.symmetric(vertical: 4),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF1A1A1A),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.cyan.withOpacity(0.3)),
+                      return Container(
+                        margin: const EdgeInsets.symmetric(vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1A1A1A),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.cyan.withOpacity(0.3)),
+                        ),
+                        child: ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: Colors.cyan,
+                            backgroundImage: photoUrl != null && photoUrl.isNotEmpty
+                                ? NetworkImage(photoUrl)
+                                : null,
+                            child: photoUrl == null || photoUrl.isEmpty
+                                ? const Icon(Icons.person, color: Colors.black)
+                                : null,
                           ),
-                          child: ListTile(
-                            leading: CircleAvatar(
+                          title: Text(name.toString(), style: const TextStyle(color: Colors.white)),
+                          subtitle: const Text('Vill bli vän', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                          trailing: ElevatedButton(
+                            onPressed: () => _acceptRequest(requests[i].id, fromUid),
+                            style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.cyan,
-                              backgroundImage: photoUrl != null && photoUrl.isNotEmpty
-                                  ? NetworkImage(photoUrl)
-                                  : null,
-                              child: photoUrl == null || photoUrl.isEmpty
-                                  ? const Icon(Icons.person, color: Colors.black)
-                                  : null,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                             ),
-                            title: Text(name.toString(), style: const TextStyle(color: Colors.white)),
-                            subtitle: const Text('Vill bli vän', style: TextStyle(color: Colors.white54, fontSize: 12)),
-                            trailing: ElevatedButton(
-                              onPressed: () => _acceptRequest(requests[i].id, fromUid),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.cyan,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                              ),
-                              child: const Text('Acceptera', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-                            ),
+                            child: const Text('Acceptera', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
                           ),
                         ),
                       );
@@ -369,7 +359,16 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
                 return const Center(child: CircularProgressIndicator(color: Colors.cyan));
               }
               if (snap.hasError) {
-                return Center(child: Text('Fel: ${snap.error}', style: const TextStyle(color: Colors.red)));
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.error_outline, color: Colors.red, size: 48),
+                      const SizedBox(height: 16),
+                      Text('Fel: ${snap.error}', style: const TextStyle(color: Colors.red), textAlign: TextAlign.center),
+                    ],
+                  ),
+                );
               }
 
               final friends = snap.data?.docs ?? [];
@@ -408,43 +407,29 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
                       final name = data['username'] ?? 'Okänd';
                       final photoUrl = data['photoUrl'] as String?;
 
-                      return TweenAnimationBuilder<double>(
-                        tween: Tween(begin: 0.0, end: 1.0),
-                        duration: Duration(milliseconds: 300 + i * 50),
-                        curve: Curves.easeOutCubic,
-                        builder: (context, value, child) {
-                          return Opacity(
-                            opacity: value,
-                            child: Transform.translate(
-                              offset: Offset(0, 15 * (1 - value)),
-                              child: child,
-                            ),
-                          );
-                        },
-                        child: Container(
-                          margin: const EdgeInsets.symmetric(vertical: 4),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF1A1A1A),
-                            borderRadius: BorderRadius.circular(12),
+                      return Container(
+                        margin: const EdgeInsets.symmetric(vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1A1A1A),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: Colors.cyan,
+                            backgroundImage: photoUrl != null && photoUrl.isNotEmpty
+                                ? NetworkImage(photoUrl)
+                                : null,
+                            child: photoUrl == null || photoUrl.isEmpty
+                                ? const Icon(Icons.person, color: Colors.black)
+                                : null,
                           ),
-                          child: ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor: Colors.cyan,
-                              backgroundImage: photoUrl != null && photoUrl.isNotEmpty
-                                  ? NetworkImage(photoUrl)
-                                  : null,
-                              child: photoUrl == null || photoUrl.isEmpty
-                                  ? const Icon(Icons.person, color: Colors.black)
-                                  : null,
-                            ),
-                            title: Text(name.toString(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
-                            trailing: IconButton(
-                              icon: const Icon(Icons.chat_bubble_outline, color: Colors.cyan),
-                              onPressed: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => ChatScreen(friendId: friendId, friendName: name.toString()),
-                                ),
+                          title: Text(name.toString(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.chat_bubble_outline, color: Colors.cyan),
+                            onPressed: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => ChatScreen(friendId: friendId, friendName: name.toString()),
                               ),
                             ),
                           ),
