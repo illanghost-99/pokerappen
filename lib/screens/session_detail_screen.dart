@@ -122,7 +122,6 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     final me = FirebaseAuth.instance.currentUser?.uid;
     if (me == null) return;
 
-    // Load friends
     final friendsSnap = await FirebaseFirestore.instance
         .collection('users')
         .doc(me)
@@ -138,7 +137,6 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
       return;
     }
 
-    // Load friend details
     final friends = <Map<String, dynamic>>[];
     for (final f in friendsSnap.docs) {
       final userDoc = await FirebaseFirestore.instance.collection('users').doc(f.id).get();
@@ -154,7 +152,6 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
 
     if (!mounted) return;
 
-    // Show friends picker
     final selected = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: const Color(0xFF1A1A1A),
@@ -202,7 +199,6 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
 
     if (selected == null) return;
 
-    // Add player to session
     await FirebaseFirestore.instance.collection('sessions').doc(widget.sessionId).update({
       'players.$selected': true,
     });
@@ -574,9 +570,16 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
 
             Center(
               child: PokerTableWidget(
+                playerCount: _playerIds.length,
                 playerNames: _playerNames,
                 playerPhotoUrls: _playerPhotoUrls,
-                onPlayerTap: isAdmin && started ? (i) => _addBuyInForPlayer(_playerIds[i], _playerNames[i]) : null,
+                isAdmin: isAdmin && started,
+                onPlayerTap: isAdmin && started ? (playerId, playerName) {
+                  final index = _playerNames.indexOf(playerName);
+                  if (index >= 0 && index < _playerIds.length) {
+                    _addBuyInForPlayer(_playerIds[index], playerName);
+                  }
+                } : null,
               ),
             ),
 
