@@ -92,12 +92,6 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
         debugPrint('Failed to mirror session to Supabase: $e');
       }
 
-      await NotificationService.scheduleSessionReminders(
-        sessionId: ref.id,
-        sessionName: _nameController.text.trim(),
-        startTime: start,
-      );
-
       if (mounted) {
         Navigator.pop(context);
       }
