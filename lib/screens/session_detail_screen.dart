@@ -6,6 +6,7 @@ import '../widgets/countdown_widget.dart';
 import '../widgets/poker_table_widget.dart';
 import 'summary_screen.dart';
 import '../services/notification_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SessionDetailScreen extends StatefulWidget {
   final String sessionId;
@@ -247,6 +248,17 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     });
 
     await _loadPlayerDetails();
+
+    // Sync participants to Supabase
+    try {
+      final sessionDoc = await FirebaseFirestore.instance.collection('sessions').doc(widget.sessionId).get();
+      final participants = List<String>.from(sessionDoc.data()?['participants'] ?? []);
+      await Supabase.instance.client.from('sessions_reminders').update({
+        'participants': participants,
+      }).eq('id', widget.sessionId);
+    } catch (e) {
+      debugPrint('Failed to sync participants to Supabase: $e');
+    }
 
     // Send invite notification
     try {
