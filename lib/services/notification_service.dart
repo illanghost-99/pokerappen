@@ -9,6 +9,10 @@ class NotificationService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   static final SupabaseClient _supabase = Supabase.instance.client;
 
+  static Future<void> init() async {
+    await initialize();
+  }
+
   static Future<void> initialize() async {
     await _messaging.requestPermission();
     final token = await _messaging.getToken();
@@ -78,5 +82,32 @@ class NotificationService {
       body: message.length > 50 ? '${message.substring(0, 50)}...' : message,
       data: {'type': 'message'},
     );
+  }
+
+  // Stub methods to prevent build errors
+  static Future<void> scheduleSessionReminders({
+    required String sessionId,
+    required String sessionName,
+    required DateTime startTime,
+  }) async {
+    // TODO: Implement later if needed
+    debugPrint('scheduleSessionReminders called for $sessionName');
+  }
+
+  static Future<void> notifyRebuy({
+    required String sessionId,
+    required String playerName,
+    required double amount,
+  }) async {
+    // TODO: Implement later if needed
+    debugPrint('notifyRebuy called');
+  }
+
+  static Future<void> notifySessionEnded({
+    required String sessionId,
+    required String sessionName,
+  }) async {
+    // TODO: Implement later if needed
+    debugPrint('notifySessionEnded called');
   }
 }
