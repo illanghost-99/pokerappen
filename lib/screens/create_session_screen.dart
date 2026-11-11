@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/notification_service.dart';
 
 class CreateSessionScreen extends StatefulWidget {
@@ -76,6 +77,20 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
         'events': [],
         'createdAt': FieldValue.serverTimestamp(),
       });
+
+      // Mirror to Supabase for scheduled reminders
+      try {
+        await Supabase.instance.client.from('sessions_reminders').upsert({
+          'id': ref.id,
+          'name': _nameController.text.trim(),
+          'start_time': start.toIso8601String(),
+          'owner_id': uid,
+          'participants': [uid],
+          'reminders_sent': [],
+        });
+      } catch (e) {
+        debugPrint('Failed to mirror session to Supabase: $e');
+      }
 
       await NotificationService.scheduleSessionReminders(
         sessionId: ref.id,
