@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../services/notification_service.dart';
 import 'chat_screen.dart';
 
 class FriendsScreen extends StatefulWidget {
@@ -79,6 +80,11 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
       'createdAt': FieldValue.serverTimestamp(),
     });
 
+    // Send notification
+    final myDoc = await FirebaseFirestore.instance.collection('users').doc(me).get();
+    final myUsername = myDoc.data()?['username'] ?? 'Någon';
+    await NotificationService.sendFriendRequestNotification(toUid, myUsername);
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -103,12 +109,10 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
     if (me == null) return;
 
     try {
-      // Update request status
       await FirebaseFirestore.instance.collection('friendRequests').doc(requestId).update({
         'status': 'accepted',
       });
 
-      // Add friend to MY list
       await FirebaseFirestore.instance
           .collection('users')
           .doc(me)
@@ -116,7 +120,6 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
           .doc(fromUid)
           .set({'addedAt': FieldValue.serverTimestamp()});
 
-      // Add me to THEIR list (separate write)
       await FirebaseFirestore.instance
           .collection('users')
           .doc(fromUid)
@@ -179,7 +182,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
       body: TabBarView(
         controller: _tabController,
         children: [
-          // Search tab
+          // Search tab remains the same as before
           Column(
             children: [
               Padding(
@@ -347,7 +350,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
             },
           ),
 
-          // Friends tab
+          // Friends tab remains the same
           StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
                 .collection('users')

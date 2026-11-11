@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../services/notification_service.dart';
 
 class ChatScreen extends StatefulWidget {
   final String friendId;
@@ -35,6 +36,11 @@ class _ChatScreenState extends State<ChatScreen> {
         'text': text,
         'timestamp': FieldValue.serverTimestamp(),
       });
+
+      // Send notification
+      final myDoc = await FirebaseFirestore.instance.collection('users').doc(me).get();
+      final myUsername = myDoc.data()?['username'] ?? 'Någon';
+      await NotificationService.sendMessageNotification(widget.friendId, myUsername, text);
     } catch (e) {
       debugPrint('Send message error: $e');
       if (mounted) {
