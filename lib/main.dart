@@ -13,7 +13,7 @@ void main() async {
 
   await Supabase.initialize(
     url: 'https://hipgawekxlgibjiekmko.supabase.co',
-    anonKey: 'REPLACE_WITH_ANON_KEY',
+    anonKey: 'sb_publishable_7N0di5rf2fUe7j1l5D-kYA_uA6PBdxl',
   );
 
   runApp(const PokerNightApp());
