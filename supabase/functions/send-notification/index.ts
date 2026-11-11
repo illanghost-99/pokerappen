@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { JWT } from "https://esm.sh/google-auth-library@9"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -21,37 +21,62 @@ serve(async (req) => {
       })
     }
 
-    const fcmServerKey = Deno.env.get('FCM_SERVER_KEY')
-    if (!fcmServerKey) {
-      throw new Error('FCM_SERVER_KEY not set')
+    const serviceAccountJson = Deno.env.get('FIREBASE_SERVICE_ACCOUNT')
+    if (!serviceAccountJson) {
+      throw new Error('FIREBASE_SERVICE_ACCOUNT secret not set')
     }
 
-    const messages = tokens.map((token: string) => ({
-      to: token,
-      notification: {
-        title: title || 'Poker Night',
-        body: body || '',
-        sound: 'default',
-      },
-      data: data || {},
-      priority: 'high',
-    }))
+    const serviceAccount = JSON.parse(serviceAccountJson)
 
-    const response = await fetch('https://fcm.googleapis.com/fcm/send', {
-      method: 'POST',
-      headers: {
-        'Authorization': `key=${fcmServerKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ registration_ids: tokens, notification: messages[0].notification, data: data || {} }),
+    const jwtClient = new JWT({
+      email: serviceAccount.client_email,
+      key: serviceAccount.private_key,
+      scopes: ['https://www.googleapis.com/auth/firebase.messaging'],
     })
 
-    const result = await response.json()
+    const accessToken = await jwtClient.getAccessToken()
 
-    return new Response(JSON.stringify({ success: true, result }), {
+    const projectId = serviceAccount.project_id
+    const url = `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`
+
+    const results = []
+
+    for (const token of tokens) {
+      const message = {
+        message: {
+          token: token,
+          notification: {
+            title: title || 'Poker Night',
+            body: body || '',
+          },
+          data: data || {},
+          android: { priority: 'high' },
+          apns: {
+            payload: {
+              aps: { sound: 'default' },
+            },
+          },
+        },
+      }
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(message),
+      })
+
+      const result = await response.json()
+      results.push(result)
+    }
+
+    return new Response(JSON.stringify({ success: true, results }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   } catch (error) {
+    console.error(error)
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
