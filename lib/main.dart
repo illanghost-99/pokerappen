@@ -50,7 +50,8 @@ class PokerNightApp extends StatelessWidget {
             );
           }
           if (snapshot.hasData) {
-            NotificationService.init();
+            // Call init after a short delay to ensure everything is ready
+            Future.microtask(() => NotificationService.init());
             return const HomeScreen();
           }
           return const LoginScreen();

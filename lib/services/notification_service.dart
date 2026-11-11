@@ -6,7 +6,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 class NotificationService {
   static final FirebaseMessaging _messaging = FirebaseMessaging.instance;
-  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   static final SupabaseClient _supabase = Supabase.instance.client;
 
   static Future<void> init() async {
@@ -14,28 +13,49 @@ class NotificationService {
   }
 
   static Future<void> initialize() async {
-    await _messaging.requestPermission();
-    final token = await _messaging.getToken();
-    if (token != null) {
-      await _saveToken(token);
+    try {
+      debugPrint('NotificationService: Requesting permission...');
+      final settings = await _messaging.requestPermission();
+      debugPrint('NotificationService: Permission status: ${settings.authorizationStatus}');
+
+      final token = await _messaging.getToken();
+      debugPrint('NotificationService: FCM Token: $token');
+
+      if (token != null) {
+        await _saveToken(token);
+      } else {
+        debugPrint('NotificationService: Token is null');
+      }
+
+      _messaging.onTokenRefresh.listen((newToken) {
+        debugPrint('NotificationService: Token refreshed');
+        _saveToken(newToken);
+      });
+    } catch (e) {
+      debugPrint('NotificationService initialize error: $e');
     }
-
-    _messaging.onTokenRefresh.listen(_saveToken);
-
-    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      // Handle foreground messages if needed
-    });
   }
 
   static Future<void> _saveToken(String token) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        debugPrint('NotificationService: No user logged in, cannot save token');
+        return;
+      }
 
-    await _supabase.from('user_tokens').upsert({
-      'user_id': user.uid,
-      'fcm_token': token,
-      'updated_at': DateTime.now().toIso8601String(),
-    });
+      debugPrint('NotificationService: Saving token for user ${user.uid}');
+
+      await _supabase.from('user_tokens').upsert({
+        'user_id': user.uid,
+        'fcm_token': token,
+        'updated_at': DateTime.now().toIso8601String(),
+      });
+
+      debugPrint('NotificationService: Token saved successfully');
+    } catch (e) {
+      debugPrint('NotificationService: Failed to save token: $e');
+    }
   }
 
   static Future<void> sendNotificationToUser({
@@ -51,16 +71,21 @@ class NotificationService {
           .eq('user_id', userId)
           .maybeSingle();
 
-      if (response == null || response['fcm_token'] == null) return;
+      if (response == null || response['fcm_token'] == null) {
+        debugPrint('No FCM token found for user $userId');
+        return;
+      }
 
       final token = response['fcm_token'] as String;
 
-      await _supabase.functions.invoke('send-notification', body: {
+      final result = await _supabase.functions.invoke('send-notification', body: {
         'title': title,
         'body': body,
         'tokens': [token],
         'data': data ?? {},
       });
+
+      debugPrint('Notification sent, response: ${result.data}');
     } catch (e) {
       debugPrint('Failed to send notification: $e');
     }
@@ -84,13 +109,11 @@ class NotificationService {
     );
   }
 
-  // Stub methods to prevent build errors
   static Future<void> scheduleSessionReminders({
     required String sessionId,
     required String sessionName,
     required DateTime startTime,
   }) async {
-    // TODO: Implement later if needed
     debugPrint('scheduleSessionReminders called for $sessionName');
   }
 
@@ -99,7 +122,6 @@ class NotificationService {
     required String playerName,
     required double amount,
   }) async {
-    // TODO: Implement later if needed
     debugPrint('notifyRebuy called');
   }
 
@@ -107,7 +129,6 @@ class NotificationService {
     required String sessionId,
     required String sessionName,
   }) async {
-    // TODO: Implement later if needed
     debugPrint('notifySessionEnded called');
   }
 }
