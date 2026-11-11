@@ -248,6 +248,19 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
 
     await _loadPlayerDetails();
 
+    // Send invite notification
+    try {
+      final me = FirebaseAuth.instance.currentUser?.uid;
+      if (me != null) {
+        final myDoc = await FirebaseFirestore.instance.collection('users').doc(me).get();
+        final myUsername = myDoc.data()?['username'] ?? 'Någon';
+        final sessionName = widget.data['name'] ?? 'Session';
+        await NotificationService.sendSessionInviteNotification(selected, sessionName, myUsername);
+      }
+    } catch (e) {
+      debugPrint('Failed to send invite notification: $e');
+    }
+
     if (mounted) {
       final name = friends.firstWhere((f) => f['uid'] == selected)['username'];
       ScaffoldMessenger.of(context).showSnackBar(
@@ -395,11 +408,19 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     });
 
     if (type == 'rebuy') {
-      await NotificationService.notifyRebuy(
-        sessionId: widget.sessionId,
-        playerName: playerName,
-        amount: amount,
-      );
+      try {
+        // Get current participants
+        final sessionDoc = await FirebaseFirestore.instance.collection('sessions').doc(widget.sessionId).get();
+        final participants = List<String>.from(sessionDoc.data()?['participants'] ?? _playerIds);
+        await NotificationService.notifyRebuy(
+          sessionId: widget.sessionId,
+          playerName: playerName,
+          amount: amount,
+          participantIds: participants,
+        );
+      } catch (e) {
+        debugPrint('Failed to send rebuy notification: $e');
+      }
     }
 
     if (mounted) {
