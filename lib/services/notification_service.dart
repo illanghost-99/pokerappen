@@ -14,23 +14,15 @@ class NotificationService {
 
   static Future<void> initialize() async {
     try {
-      debugPrint('NotificationService: Requesting permission...');
       final settings = await _messaging.requestPermission();
-      debugPrint('NotificationService: Permission status: ${settings.authorizationStatus}');
+      debugPrint('NotificationService: Permission: ${settings.authorizationStatus}');
 
       final token = await _messaging.getToken();
-      debugPrint('NotificationService: FCM Token: $token');
-
       if (token != null) {
         await _saveToken(token);
-      } else {
-        debugPrint('NotificationService: Token is null');
       }
 
-      _messaging.onTokenRefresh.listen((newToken) {
-        debugPrint('NotificationService: Token refreshed');
-        _saveToken(newToken);
-      });
+      _messaging.onTokenRefresh.listen(_saveToken);
     } catch (e) {
       debugPrint('NotificationService initialize error: $e');
     }
@@ -39,22 +31,15 @@ class NotificationService {
   static Future<void> _saveToken(String token) async {
     try {
       final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        debugPrint('NotificationService: No user logged in, cannot save token');
-        return;
-      }
-
-      debugPrint('NotificationService: Saving token for user ${user.uid}');
+      if (user == null) return;
 
       await _supabase.from('user_tokens').upsert({
         'user_id': user.uid,
         'fcm_token': token,
         'updated_at': DateTime.now().toIso8601String(),
       });
-
-      debugPrint('NotificationService: Token saved successfully');
     } catch (e) {
-      debugPrint('NotificationService: Failed to save token: $e');
+      debugPrint('Failed to save token: $e');
     }
   }
 
@@ -71,26 +56,33 @@ class NotificationService {
           .eq('user_id', userId)
           .maybeSingle();
 
-      if (response == null || response['fcm_token'] == null) {
-        debugPrint('No FCM token found for user $userId');
-        return;
-      }
+      if (response == null || response['fcm_token'] == null) return;
 
       final token = response['fcm_token'] as String;
 
-      final result = await _supabase.functions.invoke('send-notification', body: {
+      await _supabase.functions.invoke('send-notification', body: {
         'title': title,
         'body': body,
         'tokens': [token],
         'data': data ?? {},
       });
-
-      debugPrint('Notification sent, response: ${result.data}');
     } catch (e) {
       debugPrint('Failed to send notification: $e');
     }
   }
 
+  static Future<void> sendNotificationToUsers({
+    required List<String> userIds,
+    required String title,
+    required String body,
+    Map<String, String>? data,
+  }) async {
+    for (final uid in userIds) {
+      await sendNotificationToUser(userId: uid, title: title, body: body, data: data);
+    }
+  }
+
+  // Friend request
   static Future<void> sendFriendRequestNotification(String toUserId, String fromUsername) async {
     await sendNotificationToUser(
       userId: toUserId,
@@ -100,6 +92,43 @@ class NotificationService {
     );
   }
 
+  // Friend accepted
+  static Future<void> sendFriendAcceptedNotification(String toUserId, String fromUsername) async {
+    await sendNotificationToUser(
+      userId: toUserId,
+      title: 'Ny vän!',
+      body: '$fromUsername accepterade din vänförfrågan',
+      data: {'type': 'friend_accepted'},
+    );
+  }
+
+  // Session invite
+  static Future<void> sendSessionInviteNotification(String toUserId, String sessionName, String fromUsername) async {
+    await sendNotificationToUser(
+      userId: toUserId,
+      title: 'Inbjuden till session',
+      body: '$fromUsername bjöd in dig till "$sessionName"',
+      data: {'type': 'session_invite'},
+    );
+  }
+
+  // Rebuy notification to all participants
+  static Future<void> notifyRebuy({
+    required String sessionId,
+    required String playerName,
+    required double amount,
+    required List<String> participantIds,
+  }) async {
+    final amountStr = amount.toStringAsFixed(0);
+    await sendNotificationToUsers(
+      userIds: participantIds,
+      title: 'Ny rebuy 💰',
+      body: '$playerName köpte in sig för $amountStr kr',
+      data: {'type': 'rebuy', 'sessionId': sessionId},
+    );
+  }
+
+  // Message (already exists)
   static Future<void> sendMessageNotification(String toUserId, String fromUsername, String message) async {
     await sendNotificationToUser(
       userId: toUserId,
@@ -107,28 +136,5 @@ class NotificationService {
       body: message.length > 50 ? '${message.substring(0, 50)}...' : message,
       data: {'type': 'message'},
     );
-  }
-
-  static Future<void> scheduleSessionReminders({
-    required String sessionId,
-    required String sessionName,
-    required DateTime startTime,
-  }) async {
-    debugPrint('scheduleSessionReminders called for $sessionName');
-  }
-
-  static Future<void> notifyRebuy({
-    required String sessionId,
-    required String playerName,
-    required double amount,
-  }) async {
-    debugPrint('notifyRebuy called');
-  }
-
-  static Future<void> notifySessionEnded({
-    required String sessionId,
-    required String sessionName,
-  }) async {
-    debugPrint('notifySessionEnded called');
   }
 }
