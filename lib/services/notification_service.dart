@@ -137,4 +137,12 @@ class NotificationService {
       data: {'type': 'message'},
     );
   }
+
+  // Stub to avoid compile error from existing calls
+  static Future<void> notifySessionEnded({
+    required String sessionId,
+    required String sessionName,
+  }) async {
+    debugPrint('notifySessionEnded called for $sessionName (not implemented yet)');
+  }
 }
