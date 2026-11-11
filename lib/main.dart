@@ -12,8 +12,8 @@ void main() async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   await Supabase.initialize(
-    url: 'https://aomyrjehryeouplkzhwi.supabase.co',
-    anonKey: 'sb_publishable_QpQkSsT4dp0CkfyS0qVwKg_1mIQ-f5D',
+    url: 'https://hipgawekxlgibjiekmko.supabase.co',
+    anonKey: 'REPLACE_WITH_ANON_KEY',
   );
 
   runApp(const PokerNightApp());
