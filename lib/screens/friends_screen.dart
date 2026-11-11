@@ -127,6 +127,11 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
           .doc(me)
           .set({'addedAt': FieldValue.serverTimestamp()});
 
+      // Send accepted notification to the person who sent the request
+      final myDoc = await FirebaseFirestore.instance.collection('users').doc(me).get();
+      final myUsername = myDoc.data()?['username'] ?? 'Någon';
+      await NotificationService.sendFriendAcceptedNotification(fromUid, myUsername);
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
