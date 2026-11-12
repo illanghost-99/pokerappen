@@ -149,7 +149,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
 
     for (final id in playerIds) {
       if (manualMap.containsKey(id)) {
-        names.add(manualMap[id]);
+        names.add(manualMap[id] ?? 'Okänd');
         photos.add(null);
       } else {
         try {
