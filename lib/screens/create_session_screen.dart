@@ -19,6 +19,7 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
   TimeOfDay _selectedTime = const TimeOfDay(hour: 19, minute: 0);
   String _currency = 'SEK';
   String _type = 'Cash Game';
+  bool _isPrivate = false;
   bool _creating = false;
 
   Future<void> _pickDate() async {
@@ -64,32 +65,40 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
     );
 
     try {
-      final ref = await FirebaseFirestore.instance.collection('sessions').add({
+      final sessionData = {
         'name': _nameController.text.trim(),
-        'address': _addressController.text.trim(),
         'currency': _currency,
         'type': _type,
-        'startTime': Timestamp.fromDate(start),
         'ownerId': uid,
         'players': {uid: true},
         'participants': [uid],
         'buyIns': [],
         'events': [],
         'createdAt': FieldValue.serverTimestamp(),
-      });
+        'isPrivate': _isPrivate,
+      };
 
-      // Mirror to Supabase for scheduled reminders
-      try {
-        await Supabase.instance.client.from('sessions_reminders').upsert({
-          'id': ref.id,
-          'name': _nameController.text.trim(),
-          'start_time': start.toIso8601String(),
-          'owner_id': uid,
-          'participants': [uid],
-          'reminders_sent': [],
-        });
-      } catch (e) {
-        debugPrint('Failed to mirror session to Supabase: $e');
+      if (!_isPrivate) {
+        sessionData['address'] = _addressController.text.trim();
+        sessionData['startTime'] = Timestamp.fromDate(start);
+      }
+
+      final ref = await FirebaseFirestore.instance.collection('sessions').add(sessionData);
+
+      // Mirror to Supabase only for online sessions
+      if (!_isPrivate) {
+        try {
+          await Supabase.instance.client.from('sessions_reminders').upsert({
+            'id': ref.id,
+            'name': _nameController.text.trim(),
+            'start_time': start.toIso8601String(),
+            'owner_id': uid,
+            'participants': [uid],
+            'reminders_sent': [],
+          });
+        } catch (e) {
+          debugPrint('Failed to mirror session to Supabase: $e');
+        }
       }
 
       if (mounted) {
@@ -122,6 +131,41 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Session type selector
+            const Text('Typ av session', style: TextStyle(color: Colors.white70, fontSize: 16)),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: ChoiceChip(
+                    label: const Text('Online'),
+                    selected: !_isPrivate,
+                    onSelected: (_) => setState(() => _isPrivate = false),
+                    selectedColor: Colors.cyan,
+                    labelStyle: TextStyle(color: !_isPrivate ? Colors.black : Colors.white),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ChoiceChip(
+                    label: const Text('Privat'),
+                    selected: _isPrivate,
+                    onSelected: (_) => setState(() => _isPrivate = true),
+                    selectedColor: Colors.cyan,
+                    labelStyle: TextStyle(color: _isPrivate ? Colors.black : Colors.white),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _isPrivate
+                  ? 'Privat session: Endast du ser den. Du lägger till spelare manuellt med namn.'
+                  : 'Online session: Bjud in vänner via appen.',
+              style: const TextStyle(color: Colors.white54, fontSize: 13),
+            ),
+            const SizedBox(height: 20),
+
             TextField(
               controller: _nameController,
               style: const TextStyle(color: Colors.white),
@@ -133,32 +177,36 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            TextField(
-              controller: _addressController,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                labelText: 'Adress',
-                labelStyle: TextStyle(color: Colors.white54),
-                filled: true,
-                fillColor: Color(0xFF1A1A1A),
+
+            if (!_isPrivate) ...[
+              TextField(
+                controller: _addressController,
+                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(
+                  labelText: 'Adress',
+                  labelStyle: TextStyle(color: Colors.white54),
+                  filled: true,
+                  fillColor: Color(0xFF1A1A1A),
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Datum', style: TextStyle(color: Colors.white70)),
-              subtitle: Text(dateFormat.format(_selectedDate), style: const TextStyle(color: Colors.white)),
-              trailing: const Icon(Icons.calendar_today, color: Colors.cyan),
-              onTap: _pickDate,
-            ),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Starttid', style: TextStyle(color: Colors.white70)),
-              subtitle: Text(timeFormat.format(DateTime(0, 0, 0, _selectedTime.hour, _selectedTime.minute)), style: const TextStyle(color: Colors.white)),
-              trailing: const Icon(Icons.access_time, color: Colors.cyan),
-              onTap: _pickTime,
-            ),
-            const SizedBox(height: 16),
+              const SizedBox(height: 16),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Datum', style: TextStyle(color: Colors.white70)),
+                subtitle: Text(dateFormat.format(_selectedDate), style: const TextStyle(color: Colors.white)),
+                trailing: const Icon(Icons.calendar_today, color: Colors.cyan),
+                onTap: _pickDate,
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Starttid', style: TextStyle(color: Colors.white70)),
+                subtitle: Text(timeFormat.format(DateTime(0, 0, 0, _selectedTime.hour, _selectedTime.minute)), style: const TextStyle(color: Colors.white)),
+                trailing: const Icon(Icons.access_time, color: Colors.cyan),
+                onTap: _pickTime,
+              ),
+              const SizedBox(height: 16),
+            ],
+
             DropdownButtonFormField<String>(
               value: _currency,
               dropdownColor: const Color(0xFF1A1A1A),
