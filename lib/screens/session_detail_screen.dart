@@ -21,6 +21,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   List<String> _playerIds = [];
   List<String> _playerNames = [];
   List<String?> _playerPhotoUrls = [];
+  List<bool> _isFinished = [];
   Timer? _timer;
   Duration _elapsed = Duration.zero;
   DateTime? _sessionStartedAt;
@@ -152,11 +153,21 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
       }
     }
 
+    // Load finished status
+    final finishedList = List<bool>.filled(playerIds.length, false);
+    final finishedUids = List<String>.from(session.data()?['finishedPlayers'] ?? []);
+    for (int i = 0; i < playerIds.length; i++) {
+      if (finishedUids.contains(playerIds[i])) {
+        finishedList[i] = true;
+      }
+    }
+
     if (mounted) {
       setState(() {
         _playerIds = playerIds.cast<String>();
         _playerNames = names;
         _playerPhotoUrls = photos;
+        _isFinished = finishedList;
       });
     }
   }
@@ -563,11 +574,11 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
               onPressed: _deleteSession,
             ),
           ],
-          if (isAdmin)
-            IconButton(
-              icon: const Icon(Icons.summarize, color: Colors.cyan),
-              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => SummaryScreen(sessionId: widget.sessionId))),
-            ),
+          IconButton(
+            icon: const Icon(Icons.summarize, color: Colors.cyan),
+            tooltip: 'Sammanfattning',
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => SummaryScreen(sessionId: widget.sessionId))),
+          ),
         ],
       ),
       body: SingleChildScrollView(
@@ -681,9 +692,10 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                 onPlayerTap: isAdmin && started && !_isEnded ? (playerId, playerName) {
                   final index = _playerNames.indexOf(playerName);
                   if (index >= 0 && index < _playerIds.length) {
-                    _addBuyInForPlayer(_playerIds[index], playerName);
+                    _showPlayerOptions(_playerIds[index], playerName, index);
                   }
                 } : null,
+                isFinished: _isFinished,
               ),
             ),
 
@@ -708,4 +720,180 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
       ),
     );
   }
+
+
+  Future<void> _showPlayerOptions(String playerId, String playerName, int index) async {
+    final isFinished = index < _isFinished.length ? _isFinished[index] : false;
+
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: const Color(0xFF1A1A1A),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (c) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 12),
+              Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2))),
+              const SizedBox(height: 16),
+              Text(playerName, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 16),
+              if (!isFinished)
+                ListTile(
+                  leading: const Icon(Icons.add_circle, color: Colors.cyan),
+                  title: const Text('Lägg till Buy-in / Rebuy', style: TextStyle(color: Colors.white)),
+                  onTap: () => Navigator.pop(c, 'buyin'),
+                ),
+              if (!isFinished)
+                ListTile(
+                  leading: const Icon(Icons.flag, color: Colors.orange),
+                  title: const Text('Klar för idag', style: TextStyle(color: Colors.white)),
+                  onTap: () => Navigator.pop(c, 'finish'),
+                ),
+              if (isFinished)
+                ListTile(
+                  leading: const Icon(Icons.check_circle, color: Colors.grey),
+                  title: const Text('Redan klar', style: TextStyle(color: Colors.white54)),
+                ),
+              const SizedBox(height: 12),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (choice == 'buyin') {
+      await _addBuyInForPlayer(playerId, playerName);
+    } else if (choice == 'finish') {
+      await _cashOutPlayer(playerId, playerName);
+    }
+  }
+
+  Future<void> _cashOutPlayer(String playerId, String playerName) async {
+    final amountController = TextEditingController();
+    String resultType = 'plus';
+
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (c) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+            return Padding(
+              padding: EdgeInsets.only(bottom: bottomInset),
+              child: Container(
+                decoration: const BoxDecoration(
+                  color: Color(0xFF1A1A1A),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                ),
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('Cash out – $playerName', style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        _cashOption('Plus', Colors.green, resultType == 'plus', () => setModalState(() => resultType = 'plus')),
+                        _cashOption('Minus', Colors.red, resultType == 'minus', () => setModalState(() => resultType = 'minus')),
+                        _cashOption('±0', Colors.black, resultType == 'even', () => setModalState(() => resultType = 'even')),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    if (resultType != 'even')
+                      TextField(
+                        controller: amountController,
+                        keyboardType: TextInputType.number,
+                        autofocus: true,
+                        style: const TextStyle(color: Colors.white, fontSize: 24),
+                        textAlign: TextAlign.center,
+                        decoration: InputDecoration(
+                          hintText: resultType == 'plus' ? 'Cashade ut (kr)' : 'Kvar / minus (kr)',
+                          hintStyle: const TextStyle(color: Colors.white38),
+                          filled: true,
+                          fillColor: const Color(0xFF2A2A2A),
+                          border: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
+                        ),
+                      ),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pop(c, true),
+                        style: ElevatedButton.styleFrom(backgroundColor: Colors.cyan, padding: const EdgeInsets.symmetric(vertical: 16)),
+                        child: const Text('Spara', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+
+    double cashoutAmount = 0;
+    if (resultType != 'even') {
+      cashoutAmount = double.tryParse(amountController.text) ?? 0;
+    }
+
+    // Calculate total buy-ins for this player
+    final sessionDoc = await FirebaseFirestore.instance.collection('sessions').doc(widget.sessionId).get();
+    final events = sessionDoc.data()?['events'] as List? ?? [];
+    double totalBuyIns = 0;
+    for (final e in events) {
+      if (e['userId'] == playerId) {
+        totalBuyIns += (e['amount'] as num?)?.toDouble() ?? 0;
+      }
+    }
+
+    double profit = 0;
+    if (resultType == 'plus') profit = cashoutAmount - totalBuyIns;
+    else if (resultType == 'minus') profit = -cashoutAmount; // assuming they enter how much they are down, or adjust logic
+    // For minus we treat the entered amount as the loss amount for simplicity, or refine later
+
+    await FirebaseFirestore.instance.collection('sessions').doc(widget.sessionId).update({
+      'finishedPlayers': FieldValue.arrayUnion([playerId]),
+      'cashouts': FieldValue.arrayUnion([{
+        'userId': playerId,
+        'playerName': playerName,
+        'cashoutAmount': cashoutAmount,
+        'totalBuyIns': totalBuyIns,
+        'profit': profit,
+        'result': resultType,
+        'time': DateTime.now().toIso8601String(),
+      }]),
+    });
+
+    await _loadPlayerDetails();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$playerName är klar'), backgroundColor: Colors.green),
+      );
+    }
+  }
+
+  Widget _cashOption(String label, Color color, bool selected, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        decoration: BoxDecoration(
+          color: selected ? color : color.withOpacity(0.3),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color, width: selected ? 2 : 1),
+        ),
+        child: Text(label, style: TextStyle(color: selected ? Colors.white : color, fontWeight: FontWeight.bold)),
+      ),
+    );
+  }
+
 }
