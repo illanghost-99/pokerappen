@@ -140,7 +140,12 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     final photos = <String?>[];
 
     final manualPlayers = List<Map>.from(session.data()?['manualPlayers'] ?? []);
-    final manualMap = {m['id']: m['name'] for m in manualPlayers};
+    final manualMap = <String, String>{};
+    for (final m in manualPlayers) {
+      if (m['id'] != null && m['name'] != null) {
+        manualMap[m['id'].toString()] = m['name'].toString();
+      }
+    }
 
     for (final id in playerIds) {
       if (manualMap.containsKey(id)) {
