@@ -28,6 +28,8 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   DateTime? _sessionEndedAt;
   bool _isEnded = false;
 
+  bool get _isPrivate => widget.data['isPrivate'] == true;
+
   bool get _hasStarted {
     final start = (widget.data['startTime'] as Timestamp?)?.toDate();
     if (start == null) return true;
@@ -137,19 +139,27 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     final names = <String>[];
     final photos = <String?>[];
 
+    final manualPlayers = List<Map>.from(session.data()?['manualPlayers'] ?? []);
+    final manualMap = {m['id']: m['name'] for m in manualPlayers};
+
     for (final id in playerIds) {
-      try {
-        final doc = await FirebaseFirestore.instance.collection('users').doc(id).get();
-        if (doc.exists) {
-          names.add(doc.data()?['username'] ?? id);
-          photos.add(doc.data()?['photoUrl']);
-        } else {
+      if (manualMap.containsKey(id)) {
+        names.add(manualMap[id]);
+        photos.add(null);
+      } else {
+        try {
+          final doc = await FirebaseFirestore.instance.collection('users').doc(id).get();
+          if (doc.exists) {
+            names.add(doc.data()?['username'] ?? id);
+            photos.add(doc.data()?['photoUrl']);
+          } else {
+            names.add(id);
+            photos.add(null);
+          }
+        } catch (_) {
           names.add(id);
           photos.add(null);
         }
-      } catch (_) {
-        names.add(id);
-        photos.add(null);
       }
     }
 
@@ -561,7 +571,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
             IconButton(
               icon: const Icon(Icons.person_add, color: Colors.cyan),
               tooltip: 'Lägg till spelare',
-              onPressed: _addPlayerFromFriends,
+              onPressed: _isPrivate ? _addManualPlayer : _addPlayerFromFriends,
             ),
             if (isLive)
               IconButton(
@@ -591,7 +601,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                 children: [
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: _addPlayerFromFriends,
+                      onPressed: _isPrivate ? _addManualPlayer : _addPlayerFromFriends,
                       icon: const Icon(Icons.person_add),
                       label: const Text('Lägg till spelare'),
                       style: ElevatedButton.styleFrom(backgroundColor: Colors.cyan, foregroundColor: Colors.black),
@@ -894,6 +904,55 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
         child: Text(label, style: TextStyle(color: selected ? Colors.white : color, fontWeight: FontWeight.bold)),
       ),
     );
+  }
+
+
+
+  Future<void> _addManualPlayer() async {
+    final nameController = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A1A),
+        title: const Text('Lägg till spelare', style: TextStyle(color: Colors.white)),
+        content: TextField(
+          controller: nameController,
+          autofocus: true,
+          style: const TextStyle(color: Colors.white),
+          decoration: const InputDecoration(
+            hintText: 'Namn på spelare',
+            hintStyle: TextStyle(color: Colors.white38),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Avbryt')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(c, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.cyan),
+            child: const Text('Lägg till', style: TextStyle(color: Colors.black)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+    final name = nameController.text.trim();
+    if (name.isEmpty) return;
+
+    final manualId = 'manual_${DateTime.now().millisecondsSinceEpoch}';
+
+    await FirebaseFirestore.instance.collection('sessions').doc(widget.sessionId).update({
+      'players.$manualId': true,
+      'manualPlayers': FieldValue.arrayUnion([{'id': manualId, 'name': name}]),
+    });
+
+    await _loadPlayerDetails();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$name tillagd'), backgroundColor: Colors.green),
+      );
+    }
   }
 
 }
