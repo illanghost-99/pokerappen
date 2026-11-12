@@ -19,13 +19,15 @@ class SummaryScreen extends StatelessWidget {
           if (!snap.hasData) return const Center(child: CircularProgressIndicator(color: Colors.cyan));
           final data = snap.data!.data() as Map<String, dynamic>? ?? {};
           final events = data['events'] as List? ?? [];
+          final cashouts = data['cashouts'] as List? ?? [];
+          final finishedUids = List<String>.from(data['finishedPlayers'] ?? []);
           final players = data['players'] as Map? ?? {};
           final start = (data['startTime'] as Timestamp?)?.toDate();
           final endedAt = (data['endedAt'] as Timestamp?)?.toDate();
 
           double total = 0;
           int rebuys = 0;
-          final perPlayer = <String, double>{};
+          final perPlayerBuyIns = <String, double>{};
 
           for (final e in events) {
             final m = e as Map;
@@ -33,7 +35,7 @@ class SummaryScreen extends StatelessWidget {
             final name = m['playerName'] ?? 'Okänd';
             total += amount;
             if (m['type'] == 'rebuy') rebuys++;
-            perPlayer[name] = (perPlayer[name] ?? 0) + amount;
+            perPlayerBuyIns[name] = (perPlayerBuyIns[name] ?? 0) + amount;
           }
 
           final duration = (start != null && endedAt != null)
@@ -68,28 +70,55 @@ class SummaryScreen extends StatelessWidget {
                       const SizedBox(height: 12),
                       Text('Speltid: ${_formatDuration(duration)}', style: const TextStyle(color: Colors.white70)),
                     ],
-                    if (start != null)
-                      Text('Start: ${_formatTime(start)}', style: const TextStyle(color: Colors.white54, fontSize: 13)),
-                    if (endedAt != null)
-                      Text('Slut: ${_formatTime(endedAt)}', style: const TextStyle(color: Colors.white54, fontSize: 13)),
                   ],
                 ),
               ),
               const SizedBox(height: 24),
-              const Text('Per spelare', style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.w600)),
+              const Text('Spelare', style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.w600)),
               const SizedBox(height: 8),
-              ...perPlayer.entries.map((e) => Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                decoration: BoxDecoration(color: const Color(0xFF1A1A1A), borderRadius: BorderRadius.circular(12)),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(e.key, style: const TextStyle(color: Colors.white)),
-                    Text('${e.value.toStringAsFixed(0)} SEK', style: const TextStyle(color: Colors.cyan, fontWeight: FontWeight.bold)),
-                  ],
-                ),
-              )),
+              ...players.keys.map((uid) {
+                final name = _getNameForUid(uid, events, cashouts);
+                final buyIns = perPlayerBuyIns[name] ?? 0;
+                final cashout = cashouts.cast<Map>().firstWhere(
+                  (c) => c['userId'] == uid,
+                  orElse: () => {},
+                );
+                final isFinished = finishedUids.contains(uid);
+                final profit = (cashout['profit'] as num?)?.toDouble();
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(color: const Color(0xFF1A1A1A), borderRadius: BorderRadius.circular(12)),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+                            Text('Buy-in: ${buyIns.toStringAsFixed(0)} SEK', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                          ],
+                        ),
+                      ),
+                      if (!isFinished)
+                        const Text('Spelar', style: TextStyle(color: Colors.cyan, fontWeight: FontWeight.bold))
+                      else if (profit != null)
+                        Text(
+                          profit > 0 ? '+${profit.toStringAsFixed(0)}' : profit.toStringAsFixed(0),
+                          style: TextStyle(
+                            color: profit > 0 ? Colors.green : (profit < 0 ? Colors.red : Colors.white),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        )
+                      else
+                        const Text('Klar', style: TextStyle(color: Colors.white54)),
+                    ],
+                  ),
+                );
+              }),
               const SizedBox(height: 24),
               const Text('Alla händelser', style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.w600)),
               const SizedBox(height: 8),
@@ -110,13 +139,21 @@ class SummaryScreen extends StatelessWidget {
     );
   }
 
+  String _getNameForUid(String uid, List events, List cashouts) {
+    for (final e in events) {
+      if (e['userId'] == uid) return e['playerName'] ?? uid;
+    }
+    for (final c in cashouts) {
+      if (c['userId'] == uid) return c['playerName'] ?? uid;
+    }
+    return uid;
+  }
+
   String _formatDuration(Duration d) {
     final h = d.inHours;
     final m = d.inMinutes % 60;
     return '${h}h ${m}m';
   }
-
-  String _formatTime(DateTime t) => '${t.day}/${t.month} ${t.hour}:${t.minute.toString().padLeft(2, '0')}';
 
   Widget _stat(String label, String value) {
     return Column(
