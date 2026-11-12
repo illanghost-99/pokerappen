@@ -1,7 +1,7 @@
 name: poker_night
 description: Premium Poker Night session manager
 publish_to: 'none'
-version: 1.0.2+40
+version: 1.0.2+45
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
