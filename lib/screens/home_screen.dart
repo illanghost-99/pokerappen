@@ -291,6 +291,18 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         final isLive = !ended && (hasEvents || (start != null && start.isBefore(DateTime.now())));
                         final isAdmin = data['ownerId'] == uid;
 
+                        final borderColor = isLive
+                            ? Colors.amber
+                            : ended
+                                ? Colors.redAccent
+                                : Colors.cyan.withOpacity(0.4);
+                        final glowColor = isLive
+                            ? Colors.amber.withOpacity(0.45)
+                            : ended
+                                ? Colors.redAccent.withOpacity(0.4)
+                                : Colors.cyan.withOpacity(0.15);
+                        final borderWidth = isLive || ended ? 2.5 : 1.2;
+
                         return TweenAnimationBuilder<double>(
                           tween: Tween(begin: 0.0, end: 1.0),
                           duration: Duration(milliseconds: 400 + index * 80),
@@ -310,14 +322,15 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                               color: const Color(0xFF1A1A1A),
                               borderRadius: BorderRadius.circular(16),
                               border: Border.all(
-                                color: isLive ? Colors.amber.withOpacity(0.7) : (ended ? Colors.white12 : Colors.cyan.withOpacity(0.25)),
-                                width: isLive ? 2 : 1,
+                                color: borderColor,
+                                width: borderWidth,
                               ),
                               boxShadow: [
-                                if (isLive)
-                                  BoxShadow(color: Colors.amber.withOpacity(0.25), blurRadius: 16, spreadRadius: 1),
-                                if (!ended && !isLive)
-                                  BoxShadow(color: Colors.cyan.withOpacity(0.08), blurRadius: 12, spreadRadius: 1),
+                                BoxShadow(
+                                  color: glowColor,
+                                  blurRadius: isLive || ended ? 20 : 10,
+                                  spreadRadius: isLive || ended ? 1.5 : 0.5,
+                                ),
                               ],
                             ),
                             child: ListTile(
@@ -326,13 +339,13 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                               title: Text(
                                 data['name'] ?? 'Session',
                                 style: TextStyle(
-                                  color: ended ? Colors.white54 : Colors.white,
+                                  color: ended ? Colors.white70 : Colors.white,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
                               subtitle: Text(
                                 '${data['address'] ?? ''} • ${data['type'] ?? ''}\n${start != null ? '${start.day}/${start.month} ${start.hour}:${start.minute.toString().padLeft(2, '0')}' : ''}${ended ? ' • Avslutad' : isLive ? ' • Pågående' : ''}',
-                                style: TextStyle(color: ended ? Colors.white38 : Colors.white54),
+                                style: TextStyle(color: ended ? Colors.white54 : Colors.white60),
                               ),
                               trailing: const Icon(Icons.chevron_right, color: Colors.cyan),
                               onTap: () => Navigator.push(
