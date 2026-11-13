@@ -22,6 +22,8 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   List<String> _playerNames = [];
   List<String?> _playerPhotoUrls = [];
   List<bool> _isFinished = [];
+  List<double> _playerChipValues = [];
+  List<String?> _playerCashoutResults = [];
   Timer? _timer;
   Duration _elapsed = Duration.zero;
   DateTime? _sessionStartedAt;
@@ -177,12 +179,42 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
       }
     }
 
+    // Calculate chip values and cashout results
+    final events = List.from(session.data()?['events'] ?? []);
+    final cashouts = List.from(session.data()?['cashouts'] ?? []);
+    final chipValues = <double>[];
+    final cashoutResults = <String?>[];
+
+    for (final id in playerIds) {
+      double total = 0;
+      for (final e in events) {
+        if (e['userId'] == id) {
+          total += (e['amount'] as num?)?.toDouble() ?? 0;
+        }
+      }
+      chipValues.add(total);
+
+      String? result;
+      for (final c in cashouts) {
+        if (c['userId'] == id) {
+          result = c['result'] as String?;
+          if (result == 'plus') {
+            chipValues[chipValues.length - 1] = (c['profit'] as num?)?.toDouble() ?? total;
+          }
+          break;
+        }
+      }
+      cashoutResults.add(result);
+    }
+
     if (mounted) {
       setState(() {
         _playerIds = playerIds.cast<String>();
         _playerNames = names;
         _playerPhotoUrls = photos;
         _isFinished = finishedList;
+        _playerChipValues = chipValues;
+        _playerCashoutResults = cashoutResults;
       });
     }
   }
@@ -703,6 +735,8 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                 playerCount: _playerIds.length,
                 playerNames: _playerNames,
                 playerPhotoUrls: _playerPhotoUrls,
+                playerChipValues: _playerChipValues,
+                playerCashoutResults: _playerCashoutResults,
                 isAdmin: isAdmin && started && !_isEnded,
                 onPlayerTap: isAdmin && started && !_isEnded ? (playerId, playerName) {
                   final index = _playerNames.indexOf(playerName);
