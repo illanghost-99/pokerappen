@@ -71,10 +71,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       final start = (data['startTime'] as Timestamp?)?.toDate();
       final ended = data['ended'] == true || data['status'] == 'ended';
       final hasEvents = (data['events'] as List?)?.isNotEmpty == true;
+      final isPrivate = data['isPrivate'] == true;
 
       if (ended) {
         finished.add(doc);
-      } else if (hasEvents || (start != null && start.isBefore(now))) {
+      } else if (hasEvents || (start != null && start.isBefore(now)) || isPrivate) {
         live.add(doc);
       } else {
         upcoming.add(doc);
@@ -288,25 +289,33 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         final start = (data['startTime'] as Timestamp?)?.toDate();
                         final ended = data['ended'] == true || data['status'] == 'ended';
                         final hasEvents = (data['events'] as List?)?.isNotEmpty == true;
-                        final isLive = !ended && (hasEvents || (start != null && start.isBefore(DateTime.now())));
+                        final isPrivate = data['isPrivate'] == true;
+                        final isLive = !ended && (hasEvents || (start != null && start.isBefore(DateTime.now())) || isPrivate);
+                        final isUpcoming = !ended && !isLive;
                         final isAdmin = data['ownerId'] == uid;
 
                         final bgColor = isLive
                             ? const Color(0xFF2A2200)
                             : ended
                                 ? const Color(0xFF2A0A0A)
-                                : const Color(0xFF1A1A1A);
+                                : isUpcoming
+                                    ? const Color(0xFF0A1A2A)
+                                    : const Color(0xFF1A1A1A);
                         final borderColor = isLive
                             ? Colors.amber
                             : ended
                                 ? Colors.redAccent
-                                : Colors.cyan.withOpacity(0.4);
+                                : isUpcoming
+                                    ? Colors.cyan
+                                    : Colors.cyan.withOpacity(0.4);
                         final glowColor = isLive
                             ? Colors.amber.withOpacity(0.5)
                             : ended
                                 ? Colors.redAccent.withOpacity(0.45)
-                                : Colors.cyan.withOpacity(0.15);
-                        final borderWidth = isLive || ended ? 2.5 : 1.2;
+                                : isUpcoming
+                                    ? Colors.cyan.withOpacity(0.4)
+                                    : Colors.cyan.withOpacity(0.15);
+                        final borderWidth = isLive || ended || isUpcoming ? 2.5 : 1.2;
 
                         return TweenAnimationBuilder<double>(
                           tween: Tween(begin: 0.0, end: 1.0),
@@ -333,8 +342,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                               boxShadow: [
                                 BoxShadow(
                                   color: glowColor,
-                                  blurRadius: isLive || ended ? 24 : 10,
-                                  spreadRadius: isLive || ended ? 2 : 0.5,
+                                  blurRadius: isLive || ended || isUpcoming ? 24 : 10,
+                                  spreadRadius: isLive || ended || isUpcoming ? 2 : 0.5,
                                 ),
                               ],
                             ),
@@ -343,13 +352,13 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                               leading: _TwoAcesIcon(),
                               title: Text(
                                 data['name'] ?? 'Session',
-                                style: TextStyle(
+                                style: const TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
                               subtitle: Text(
-                                '${data['address'] ?? ''} • ${data['type'] ?? ''}\n${start != null ? '${start.day}/${start.month} ${start.hour}:${start.minute.toString().padLeft(2, '0')}' : ''}${ended ? ' • Avslutad' : isLive ? ' • Pågående' : ''}',
+                                '${data['address'] ?? ''} • ${data['type'] ?? ''}\n${start != null ? '${start.day}/${start.month} ${start.hour}:${start.minute.toString().padLeft(2, '0')}' : ''}${ended ? ' • Avslutad' : isLive ? ' • Pågående' : isUpcoming ? ' • Kommande' : ''}${isPrivate ? ' • Privat' : ''}',
                                 style: const TextStyle(color: Colors.white70),
                               ),
                               trailing: const Icon(Icons.chevron_right, color: Colors.cyan),
