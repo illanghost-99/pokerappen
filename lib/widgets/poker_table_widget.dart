@@ -27,40 +27,41 @@ class PokerTableWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final count = playerCount.clamp(0, 9);
     return SizedBox(
-      height: 400,
+      height: 440,
+      width: double.infinity,
       child: Stack(
         alignment: Alignment.center,
         children: [
           // Poker table
           Container(
-            width: 280,
-            height: 170,
+            width: 260,
+            height: 160,
             decoration: BoxDecoration(
               gradient: const RadialGradient(
                 colors: [Color(0xFF1E7A1E), Color(0xFF0F4A0F)],
                 center: Alignment.center,
                 radius: 0.85,
               ),
-              borderRadius: BorderRadius.circular(85),
-              border: Border.all(color: const Color(0xFF3D2B1F), width: 8),
+              borderRadius: BorderRadius.circular(80),
+              border: Border.all(color: const Color(0xFF3D2B1F), width: 7),
               boxShadow: [
-                BoxShadow(color: Colors.black.withOpacity(0.45), blurRadius: 16, offset: const Offset(0, 4)),
-                BoxShadow(color: Colors.green.withOpacity(0.15), blurRadius: 22, spreadRadius: 1),
+                BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 14, offset: const Offset(0, 3)),
+                BoxShadow(color: Colors.green.withOpacity(0.12), blurRadius: 18, spreadRadius: 1),
               ],
             ),
             child: Container(
-              margin: const EdgeInsets.all(4),
+              margin: const EdgeInsets.all(3),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(74),
-                border: Border.all(color: const Color(0xFF5C4033), width: 1.8),
+                borderRadius: BorderRadius.circular(70),
+                border: Border.all(color: const Color(0xFF5C4033), width: 1.5),
               ),
               child: const Center(
                 child: Text(
                   'POKER',
                   style: TextStyle(
                     color: Colors.white70,
-                    fontSize: 14,
-                    letterSpacing: 3,
+                    fontSize: 13,
+                    letterSpacing: 2.5,
                     fontWeight: FontWeight.bold,
                     shadows: [Shadow(color: Colors.black45, blurRadius: 2)],
                   ),
@@ -69,18 +70,18 @@ class PokerTableWidget extends StatelessWidget {
             ),
           ),
 
-          // Amounts on the table
+          // Amounts
           ...List.generate(count, (i) {
             final angle = (i / count) * 2 * math.pi - math.pi / 2;
-            final amountX = 88 * math.cos(angle);
-            final amountY = 55 * math.sin(angle);
+            final amountX = 82 * math.cos(angle);
+            final amountY = 52 * math.sin(angle);
             final value = i < playerChipValues.length ? playerChipValues[i] : 0.0;
             final cashoutResult = i < playerCashoutResults.length ? playerCashoutResults[i] : null;
             final finished = i < isFinished.length ? isFinished[i] : false;
 
             return Positioned(
-              left: 140 + amountX - 28,
-              top: 200 + amountY - 12,
+              left: MediaQuery.of(context).size.width / 2 + amountX - 30,
+              top: 220 + amountY - 10,
               child: _buildAmount(value, cashoutResult, finished),
             );
           }),
@@ -88,16 +89,16 @@ class PokerTableWidget extends StatelessWidget {
           // Players
           ...List.generate(count, (i) {
             final angle = (i / count) * 2 * math.pi - math.pi / 2;
-            final playerX = 145 * math.cos(angle);
-            final playerY = 92 * math.sin(angle);
+            final playerX = 135 * math.cos(angle);
+            final playerY = 85 * math.sin(angle);
             final name = i < playerNames.length ? playerNames[i] : 'Spelare ${i + 1}';
             final playerId = i < playerNames.length ? playerNames[i] : 'player_$i';
             final photoUrl = i < playerPhotoUrls.length ? playerPhotoUrls[i] : null;
             final finished = i < isFinished.length ? isFinished[i] : false;
 
             return Positioned(
-              left: 140 + playerX - 26,
-              top: 200 + playerY - 26,
+              left: MediaQuery.of(context).size.width / 2 + playerX - 24,
+              top: 220 + playerY - 24,
               child: GestureDetector(
                 onTap: isAdmin && onPlayerTap != null ? () => onPlayerTap!(playerId, name) : null,
                 child: Column(
@@ -107,11 +108,11 @@ class PokerTableWidget extends StatelessWidget {
                         Opacity(
                           opacity: finished ? 0.5 : 1.0,
                           child: CircleAvatar(
-                            radius: 24,
+                            radius: 22,
                             backgroundColor: finished ? Colors.grey.shade800 : Colors.cyan.shade800,
                             backgroundImage: photoUrl != null && photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
                             child: photoUrl == null || photoUrl.isEmpty
-                                ? Text('${i + 1}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13))
+                                ? Text('${i + 1}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12))
                                 : null,
                           ),
                         ),
@@ -122,7 +123,7 @@ class PokerTableWidget extends StatelessWidget {
                             child: Container(
                               padding: const EdgeInsets.all(2),
                               decoration: const BoxDecoration(color: Colors.cyan, shape: BoxShape.circle),
-                              child: const Icon(Icons.add, size: 10, color: Colors.black),
+                              child: const Icon(Icons.add, size: 9, color: Colors.black),
                             ),
                           ),
                         if (finished)
@@ -132,19 +133,19 @@ class PokerTableWidget extends StatelessWidget {
                             child: Container(
                               padding: const EdgeInsets.all(2),
                               decoration: const BoxDecoration(color: Colors.grey, shape: BoxShape.circle),
-                              child: const Icon(Icons.check, size: 9, color: Colors.white),
+                              child: const Icon(Icons.check, size: 8, color: Colors.white),
                             ),
                           ),
                       ],
                     ),
                     const SizedBox(height: 1),
                     SizedBox(
-                      width: 56,
+                      width: 52,
                       child: Text(
                         name,
                         style: TextStyle(
                           color: finished ? Colors.white38 : Colors.white,
-                          fontSize: 9.5,
+                          fontSize: 9,
                           fontWeight: FontWeight.w500,
                         ),
                         textAlign: TextAlign.center,
@@ -168,34 +169,34 @@ class PokerTableWidget extends StatelessWidget {
 
     if (cashoutResult == 'even') {
       text = '0 kr';
-      color = Colors.white70;
+      color = Colors.white;
     } else if (cashoutResult == 'plus') {
       text = '+${value.abs().toStringAsFixed(0)} kr';
-      color = Colors.greenAccent;
+      color = const Color(0xFF00E676);
     } else if (cashoutResult == 'minus') {
       text = '-${value.abs().toStringAsFixed(0)} kr';
-      color = Colors.redAccent;
+      color = const Color(0xFFFF1744);
     } else if (value > 0) {
       text = '${value.toStringAsFixed(0)} kr';
       color = Colors.white;
     } else {
-      return const SizedBox(width: 56, height: 20);
+      return const SizedBox(width: 52, height: 18);
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
       decoration: BoxDecoration(
-        color: Colors.black54,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.6), width: 1),
+        color: Colors.black.withOpacity(0.65),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withOpacity(0.7), width: 1),
       ),
       child: Text(
         text,
         style: TextStyle(
           color: color,
-          fontSize: 11,
+          fontSize: 10,
           fontWeight: FontWeight.bold,
-          shadows: [Shadow(color: color.withOpacity(0.5), blurRadius: 4)],
+          shadows: [Shadow(color: color.withOpacity(0.6), blurRadius: 3)],
         ),
         textAlign: TextAlign.center,
       ),
