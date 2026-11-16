@@ -36,10 +36,12 @@ class PokerTableWidget extends StatelessWidget {
     final centerX = screenWidth / 2;
     const centerY = 250.0;
 
-    // Smaller radius so players sit around the table, not on top of it
-    final double baseRadius = count <= 6 ? 145.0 : (count <= 8 ? 155.0 : 162.0);
+    // Elliptical placement so players sit cleanly outside the oval table
+    final double radiusX = count <= 6 ? 175.0 : (count <= 8 ? 185.0 : 192.0);
+    final double radiusY = count <= 6 ? 130.0 : (count <= 8 ? 138.0 : 145.0);
     final double avatarRadius = count <= 6 ? 26.0 : (count <= 8 ? 22.0 : 18.0);
-    final double amountRadius = baseRadius - 42;
+    final double amountRadiusX = radiusX - 48;
+    final double amountRadiusY = radiusY - 38;
 
     return SizedBox(
       height: 500,
@@ -89,8 +91,8 @@ class PokerTableWidget extends StatelessWidget {
           // Amounts
           ...List.generate(count, (i) {
             final angle = (i / count) * 2 * math.pi - math.pi / 2;
-            final amountX = amountRadius * math.cos(angle);
-            final amountY = amountRadius * math.sin(angle);
+            final amountX = amountRadiusX * math.cos(angle);
+            final amountY = amountRadiusY * math.sin(angle);
             final value = i < playerChipValues.length ? playerChipValues[i] : 0.0;
             final cashoutResult = i < playerCashoutResults.length ? playerCashoutResults[i] : null;
             final finished = i < isFinished.length ? isFinished[i] : false;
@@ -105,8 +107,8 @@ class PokerTableWidget extends StatelessWidget {
           // Players
           ...List.generate(count, (i) {
             final angle = (i / count) * 2 * math.pi - math.pi / 2;
-            final playerX = baseRadius * math.cos(angle);
-            final playerY = baseRadius * math.sin(angle);
+            final playerX = radiusX * math.cos(angle);
+            final playerY = radiusY * math.sin(angle);
             final name = i < playerNames.length ? playerNames[i] : 'Spelare ${i + 1}';
             final playerId = i < playerNames.length ? playerNames[i] : 'player_$i';
             final photoUrl = i < playerPhotoUrls.length ? playerPhotoUrls[i] : null;
