@@ -36,18 +36,21 @@ class PokerTableWidget extends StatelessWidget {
     final centerX = screenWidth / 2;
     const centerY = 250.0;
 
-    // Table half-sizes + small offset so avatars sit right at the edge
-    const double tableHalfW = 160.0;
-    const double tableHalfH = 95.0;
+    // Table dimensions
+    const double tableWidth = 320.0;
+    const double tableHeight = 190.0;
+    const double tableHalfW = tableWidth / 2;
+    const double tableHalfH = tableHeight / 2;
+
+    // Avatar size scales slightly with player count
     final double avatarRadius = count <= 6 ? 26.0 : (count <= 8 ? 22.0 : 18.0);
 
-    // Perfect elliptical radius – same for all players, centered on table
-    final double radiusX = tableHalfW + avatarRadius + 8;
-    final double radiusY = tableHalfH + avatarRadius + 6;
+    // Elliptical orbit – players sit just outside the table edge
+    final double radiusX = tableHalfW + avatarRadius + 14;
+    final double radiusY = tableHalfH + avatarRadius + 12;
 
-    // Amounts sit just inside the players, outside the table edge
-    final double amountRadiusX = tableHalfW + 18;
-    final double amountRadiusY = tableHalfH + 14;
+    // Amounts sit between table edge and players (inward from player position)
+    final double amountOffset = avatarRadius + 22;
 
     return SizedBox(
       height: 520,
@@ -58,8 +61,8 @@ class PokerTableWidget extends StatelessWidget {
         children: [
           // Poker table (unchanged)
           Container(
-            width: 320,
-            height: 190,
+            width: tableWidth,
+            height: tableHeight,
             decoration: BoxDecoration(
               gradient: const RadialGradient(
                 colors: [Color(0xFF1E7A1E), Color(0xFF0F4A0F)],
@@ -94,106 +97,112 @@ class PokerTableWidget extends StatelessWidget {
             ),
           ),
 
-          // Amounts
+          // Players + amounts as single units, placed mathematically
           ...List.generate(count, (i) {
             final angle = (i / count) * 2 * math.pi - math.pi / 2;
-            final amountX = amountRadiusX * math.cos(angle);
-            final amountY = amountRadiusY * math.sin(angle);
-            final value = i < playerChipValues.length ? playerChipValues[i] : 0.0;
-            final cashoutResult = i < playerCashoutResults.length ? playerCashoutResults[i] : null;
-            final finished = i < isFinished.length ? isFinished[i] : false;
+            final cosA = math.cos(angle);
+            final sinA = math.sin(angle);
 
-            return Positioned(
-              left: centerX + amountX - 28,
-              top: centerY + amountY - 10,
-              child: _buildAmount(value, cashoutResult, finished),
-            );
-          }),
+            // Player position on ellipse
+            final playerX = radiusX * cosA;
+            final playerY = radiusY * sinA;
 
-          // Players – perfectly even and centered
-          ...List.generate(count, (i) {
-            final angle = (i / count) * 2 * math.pi - math.pi / 2;
-            final playerX = radiusX * math.cos(angle);
-            final playerY = radiusY * math.sin(angle);
+            // Amount position: offset inward toward table center along the same angle
+            final amountX = (radiusX - amountOffset) * cosA;
+            final amountY = (radiusY - amountOffset) * sinA;
+
             final name = i < playerNames.length ? playerNames[i] : 'Spelare ${i + 1}';
             final playerId = i < playerNames.length ? playerNames[i] : 'player_$i';
             final photoUrl = i < playerPhotoUrls.length ? playerPhotoUrls[i] : null;
             final finished = i < isFinished.length ? isFinished[i] : false;
+            final value = i < playerChipValues.length ? playerChipValues[i] : 0.0;
+            final cashoutResult = i < playerCashoutResults.length ? playerCashoutResults[i] : null;
 
-            return Positioned(
-              left: centerX + playerX - avatarRadius,
-              top: centerY + playerY - avatarRadius - 6,
-              child: GestureDetector(
-                onTap: () {
-                  if (isEnded) {
-                    if (photoUrl != null && photoUrl.isNotEmpty && onViewPhoto != null) {
-                      onViewPhoto!(photoUrl, name);
-                    }
-                    return;
-                  }
-                  if (isAdmin && finished && onContinue != null) {
-                    onContinue!(playerId, name);
-                  } else if (isAdmin && !finished && onPlayerTap != null) {
-                    onPlayerTap!(playerId, name);
-                  } else if (photoUrl != null && photoUrl.isNotEmpty && onViewPhoto != null) {
-                    onViewPhoto!(photoUrl, name);
-                  }
-                },
-                child: Column(
-                  children: [
-                    Stack(
+            return Stack(
+              children: [
+                // Amount (between player and table)
+                Positioned(
+                  left: centerX + amountX - 28,
+                  top: centerY + amountY - 10,
+                  child: _buildAmount(value, cashoutResult, finished),
+                ),
+                // Player (avatar + name)
+                Positioned(
+                  left: centerX + playerX - avatarRadius,
+                  top: centerY + playerY - avatarRadius - 6,
+                  child: GestureDetector(
+                    onTap: () {
+                      if (isEnded) {
+                        if (photoUrl != null && photoUrl.isNotEmpty && onViewPhoto != null) {
+                          onViewPhoto!(photoUrl, name);
+                        }
+                        return;
+                      }
+                      if (isAdmin && finished && onContinue != null) {
+                        onContinue!(playerId, name);
+                      } else if (isAdmin && !finished && onPlayerTap != null) {
+                        onPlayerTap!(playerId, name);
+                      } else if (photoUrl != null && photoUrl.isNotEmpty && onViewPhoto != null) {
+                        onViewPhoto!(photoUrl, name);
+                      }
+                    },
+                    child: Column(
                       children: [
-                        Opacity(
-                          opacity: finished ? 0.5 : 1.0,
-                          child: CircleAvatar(
-                            radius: avatarRadius,
-                            backgroundColor: finished ? Colors.grey.shade800 : Colors.cyan.shade800,
-                            backgroundImage: photoUrl != null && photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
-                            child: photoUrl == null || photoUrl.isEmpty
-                                ? Text('${i + 1}', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: avatarRadius * 0.55))
-                                : null,
+                        Stack(
+                          children: [
+                            Opacity(
+                              opacity: finished ? 0.5 : 1.0,
+                              child: CircleAvatar(
+                                radius: avatarRadius,
+                                backgroundColor: finished ? Colors.grey.shade800 : Colors.cyan.shade800,
+                                backgroundImage: photoUrl != null && photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
+                                child: photoUrl == null || photoUrl.isEmpty
+                                    ? Text('${i + 1}', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: avatarRadius * 0.55))
+                                    : null,
+                              ),
+                            ),
+                            if (isAdmin && !finished && !isEnded)
+                              Positioned(
+                                right: 0,
+                                bottom: 0,
+                                child: Container(
+                                  padding: const EdgeInsets.all(2),
+                                  decoration: const BoxDecoration(color: Colors.cyan, shape: BoxShape.circle),
+                                  child: Icon(Icons.add, size: avatarRadius * 0.4, color: Colors.black),
+                                ),
+                              ),
+                            if (finished)
+                              Positioned(
+                                right: 0,
+                                bottom: 0,
+                                child: Container(
+                                  padding: const EdgeInsets.all(2),
+                                  decoration: const BoxDecoration(color: Colors.grey, shape: BoxShape.circle),
+                                  child: Icon(Icons.check, size: avatarRadius * 0.38, color: Colors.white),
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        SizedBox(
+                          width: avatarRadius * 2.2,
+                          child: Text(
+                            name,
+                            style: TextStyle(
+                              color: finished ? Colors.white38 : Colors.white,
+                              fontSize: avatarRadius * 0.38,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            textAlign: TextAlign.center,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        if (isAdmin && !finished && !isEnded)
-                          Positioned(
-                            right: 0,
-                            bottom: 0,
-                            child: Container(
-                              padding: const EdgeInsets.all(2),
-                              decoration: const BoxDecoration(color: Colors.cyan, shape: BoxShape.circle),
-                              child: Icon(Icons.add, size: avatarRadius * 0.4, color: Colors.black),
-                            ),
-                          ),
-                        if (finished)
-                          Positioned(
-                            right: 0,
-                            bottom: 0,
-                            child: Container(
-                              padding: const EdgeInsets.all(2),
-                              decoration: const BoxDecoration(color: Colors.grey, shape: BoxShape.circle),
-                              child: Icon(Icons.check, size: avatarRadius * 0.38, color: Colors.white),
-                            ),
-                          ),
                       ],
                     ),
-                    const SizedBox(height: 2),
-                    SizedBox(
-                      width: avatarRadius * 2.2,
-                      child: Text(
-                        name,
-                        style: TextStyle(
-                          color: finished ? Colors.white38 : Colors.white,
-                          fontSize: avatarRadius * 0.38,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        textAlign: TextAlign.center,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
+              ],
             );
           }),
         ],
