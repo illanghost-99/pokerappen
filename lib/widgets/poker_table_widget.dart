@@ -9,7 +9,10 @@ class PokerTableWidget extends StatelessWidget {
   final List<double> playerChipValues;
   final List<String?> playerCashoutResults;
   final bool isAdmin;
+  final bool isEnded;
   final Function(String playerId, String playerName)? onPlayerTap;
+  final Function(String playerId, String playerName)? onContinue;
+  final Function(String? photoUrl, String name)? onViewPhoto;
 
   const PokerTableWidget({
     super.key,
@@ -20,12 +23,19 @@ class PokerTableWidget extends StatelessWidget {
     this.playerChipValues = const [],
     this.playerCashoutResults = const [],
     this.isAdmin = false,
+    this.isEnded = false,
     this.onPlayerTap,
+    this.onContinue,
+    this.onViewPhoto,
   });
 
   @override
   Widget build(BuildContext context) {
     final count = playerCount.clamp(0, 9);
+    final screenWidth = MediaQuery.of(context).size.width;
+    final centerX = screenWidth / 2;
+    const centerY = 250.0;
+
     return SizedBox(
       height: 500,
       width: double.infinity,
@@ -33,7 +43,7 @@ class PokerTableWidget extends StatelessWidget {
         clipBehavior: Clip.none,
         alignment: Alignment.center,
         children: [
-          // Poker table (normal size)
+          // Poker table
           Container(
             width: 320,
             height: 190,
@@ -81,13 +91,13 @@ class PokerTableWidget extends StatelessWidget {
             final finished = i < isFinished.length ? isFinished[i] : false;
 
             return Positioned(
-              left: MediaQuery.of(context).size.width / 2 + amountX - 32,
-              top: 250 + amountY - 12,
+              left: centerX + amountX - 32,
+              top: centerY + amountY - 12,
               child: _buildAmount(value, cashoutResult, finished),
             );
           }),
 
-          // Players
+          // Players (evenly spaced)
           ...List.generate(count, (i) {
             final angle = (i / count) * 2 * math.pi - math.pi / 2;
             final playerX = 165 * math.cos(angle);
@@ -98,10 +108,24 @@ class PokerTableWidget extends StatelessWidget {
             final finished = i < isFinished.length ? isFinished[i] : false;
 
             return Positioned(
-              left: MediaQuery.of(context).size.width / 2 + playerX - 28,
-              top: 250 + playerY - 28,
+              left: centerX + playerX - 28,
+              top: centerY + playerY - 28,
               child: GestureDetector(
-                onTap: isAdmin && onPlayerTap != null ? () => onPlayerTap!(playerId, name) : null,
+                onTap: () {
+                  if (isEnded) {
+                    if (photoUrl != null && photoUrl.isNotEmpty && onViewPhoto != null) {
+                      onViewPhoto!(photoUrl, name);
+                    }
+                    return;
+                  }
+                  if (isAdmin && finished && onContinue != null) {
+                    onContinue!(playerId, name);
+                  } else if (isAdmin && !finished && onPlayerTap != null) {
+                    onPlayerTap!(playerId, name);
+                  } else if (photoUrl != null && photoUrl.isNotEmpty && onViewPhoto != null) {
+                    onViewPhoto!(photoUrl, name);
+                  }
+                },
                 child: Column(
                   children: [
                     Stack(
@@ -117,7 +141,7 @@ class PokerTableWidget extends StatelessWidget {
                                 : null,
                           ),
                         ),
-                        if (isAdmin && !finished)
+                        if (isAdmin && !finished && !isEnded)
                           Positioned(
                             right: 0,
                             bottom: 0,
@@ -178,7 +202,6 @@ class PokerTableWidget extends StatelessWidget {
       text = '-${value.abs().toStringAsFixed(0)} kr';
       color = const Color(0xFFFF1744);
     } else if (value > 0) {
-      // Still active – show total buy-in + rebuys
       text = '${value.toStringAsFixed(0)} kr';
       color = Colors.white;
     } else {
