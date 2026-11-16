@@ -155,7 +155,7 @@ class SummaryScreen extends StatelessWidget {
                 if (timeStr != null) {
                   final t = DateTime.tryParse(timeStr);
                   if (t != null) {
-                    timeDisplay = DateFormat('HH:mm').format(t);
+                    timeDisplay = DateFormat('d MMM HH:mm').format(t);
                   }
                 }
 
