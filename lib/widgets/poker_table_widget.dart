@@ -31,13 +31,18 @@ class PokerTableWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final count = playerCount.clamp(0, 9);
+    final count = playerCount.clamp(0, 10);
     final screenWidth = MediaQuery.of(context).size.width;
     final centerX = screenWidth / 2;
     const centerY = 250.0;
 
+    // Dynamic radius and avatar size for symmetry and fit
+    final double baseRadius = count <= 6 ? 175.0 : (count <= 8 ? 185.0 : 195.0);
+    final double avatarRadius = count <= 6 ? 26.0 : (count <= 8 ? 22.0 : 18.0);
+    final double amountRadius = baseRadius - 48;
+
     return SizedBox(
-      height: 500,
+      height: 520,
       width: double.infinity,
       child: Stack(
         clipBehavior: Clip.none,
@@ -81,11 +86,11 @@ class PokerTableWidget extends StatelessWidget {
             ),
           ),
 
-          // Amounts (closer to players for better symmetry)
+          // Amounts (symmetrically placed inward from each player)
           ...List.generate(count, (i) {
             final angle = (i / count) * 2 * math.pi - math.pi / 2;
-            final amountX = 118 * math.cos(angle);
-            final amountY = 74 * math.sin(angle);
+            final amountX = amountRadius * math.cos(angle);
+            final amountY = amountRadius * math.sin(angle);
             final value = i < playerChipValues.length ? playerChipValues[i] : 0.0;
             final cashoutResult = i < playerCashoutResults.length ? playerCashoutResults[i] : null;
             final finished = i < isFinished.length ? isFinished[i] : false;
@@ -97,19 +102,19 @@ class PokerTableWidget extends StatelessWidget {
             );
           }),
 
-          // Players (evenly spaced)
+          // Players (perfectly even slots)
           ...List.generate(count, (i) {
             final angle = (i / count) * 2 * math.pi - math.pi / 2;
-            final playerX = 168 * math.cos(angle);
-            final playerY = 108 * math.sin(angle);
+            final playerX = baseRadius * math.cos(angle);
+            final playerY = baseRadius * math.sin(angle);
             final name = i < playerNames.length ? playerNames[i] : 'Spelare ${i + 1}';
             final playerId = i < playerNames.length ? playerNames[i] : 'player_$i';
             final photoUrl = i < playerPhotoUrls.length ? playerPhotoUrls[i] : null;
             final finished = i < isFinished.length ? isFinished[i] : false;
 
             return Positioned(
-              left: centerX + playerX - 28,
-              top: centerY + playerY - 28,
+              left: centerX + playerX - avatarRadius,
+              top: centerY + playerY - avatarRadius - 8,
               child: GestureDetector(
                 onTap: () {
                   if (isEnded) {
@@ -133,11 +138,11 @@ class PokerTableWidget extends StatelessWidget {
                         Opacity(
                           opacity: finished ? 0.5 : 1.0,
                           child: CircleAvatar(
-                            radius: 26,
+                            radius: avatarRadius,
                             backgroundColor: finished ? Colors.grey.shade800 : Colors.cyan.shade800,
                             backgroundImage: photoUrl != null && photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
                             child: photoUrl == null || photoUrl.isEmpty
-                                ? Text('${i + 1}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14))
+                                ? Text('${i + 1}', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: avatarRadius * 0.55))
                                 : null,
                           ),
                         ),
@@ -148,7 +153,7 @@ class PokerTableWidget extends StatelessWidget {
                             child: Container(
                               padding: const EdgeInsets.all(2),
                               decoration: const BoxDecoration(color: Colors.cyan, shape: BoxShape.circle),
-                              child: const Icon(Icons.add, size: 11, color: Colors.black),
+                              child: Icon(Icons.add, size: avatarRadius * 0.4, color: Colors.black),
                             ),
                           ),
                         if (finished)
@@ -158,19 +163,19 @@ class PokerTableWidget extends StatelessWidget {
                             child: Container(
                               padding: const EdgeInsets.all(2),
                               decoration: const BoxDecoration(color: Colors.grey, shape: BoxShape.circle),
-                              child: const Icon(Icons.check, size: 10, color: Colors.white),
+                              child: Icon(Icons.check, size: avatarRadius * 0.38, color: Colors.white),
                             ),
                           ),
                       ],
                     ),
                     const SizedBox(height: 2),
                     SizedBox(
-                      width: 60,
+                      width: avatarRadius * 2.2,
                       child: Text(
                         name,
                         style: TextStyle(
                           color: finished ? Colors.white38 : Colors.white,
-                          fontSize: 10,
+                          fontSize: avatarRadius * 0.38,
                           fontWeight: FontWeight.w500,
                         ),
                         textAlign: TextAlign.center,
@@ -211,7 +216,7 @@ class PokerTableWidget extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.6),
+        color: Colors.black.withOpacity(0.65),
         borderRadius: BorderRadius.circular(7),
         border: Border.all(color: color.withOpacity(0.7), width: 1),
       ),
