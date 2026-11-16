@@ -37,23 +37,20 @@ class PokerTableWidget extends StatelessWidget {
     }
 
     final screenWidth = MediaQuery.of(context).size.width;
-    final centerX = screenWidth / 2;
+    final centerX = screenWidth / 2 - 12; // slight left shift for players only
     const centerY = 250.0;
 
-    // Table half-sizes
     const double tableHalfW = 160.0;
     const double tableHalfH = 95.0;
 
-    // Avatar size
     final double avatarRadius = count <= 6 ? 26.0 : (count <= 8 ? 22.0 : 18.0);
 
-    // Perfect elliptical orbit – same for every player
     final double radiusX = tableHalfW + avatarRadius + 16;
     final double radiusY = tableHalfH + avatarRadius + 14;
 
-    // Amounts sit between table edge and avatar (inward along the same angle)
-    final double amountRadiusX = tableHalfW + 20;
-    final double amountRadiusY = tableHalfH + 16;
+    // Amounts sit clearly in front of each player (closer to table)
+    final double amountRadiusX = tableHalfW + 22;
+    final double amountRadiusY = tableHalfH + 18;
 
     return SizedBox(
       height: 520,
@@ -62,7 +59,7 @@ class PokerTableWidget extends StatelessWidget {
         clipBehavior: Clip.none,
         alignment: Alignment.center,
         children: [
-          // Poker table (unchanged)
+          // Table stays centered
           Container(
             width: tableHalfW * 2,
             height: tableHalfH * 2,
@@ -100,7 +97,6 @@ class PokerTableWidget extends StatelessWidget {
             ),
           ),
 
-          // All seats placed with the same formula
           ...List.generate(count, (i) {
             final angle = (i / count) * 2 * math.pi - math.pi / 2;
             final cosA = math.cos(angle);
@@ -121,13 +117,11 @@ class PokerTableWidget extends StatelessWidget {
 
             return Stack(
               children: [
-                // Amount – between player and table
                 Positioned(
                   left: centerX + amountX - 28,
                   top: centerY + amountY - 10,
                   child: _buildAmount(value, cashoutResult, finished),
                 ),
-                // Player seat
                 Positioned(
                   left: centerX + playerX - avatarRadius,
                   top: centerY + playerY - avatarRadius - 6,
