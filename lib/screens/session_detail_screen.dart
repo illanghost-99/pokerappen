@@ -21,9 +21,11 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   List<double> _playerChipValues = [];
   List<String?> _playerCashoutResults = [];
   List<bool> _isFinished = [];
+  List<Map<String, dynamic>> _events = [];
   bool _isEnded = false;
   bool _hasStarted = false;
   bool _isPrivate = false;
+  bool _isPaused = false;
   DateTime? _startedAt;
   DateTime? _sessionDate;
   double _totalPot = 0;
@@ -41,8 +43,9 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     final players = data['players'] as Map? ?? {};
     final finished = List<String>.from(data['finishedPlayers'] ?? []);
     final cashouts = data['cashouts'] as List? ?? [];
-    final events = data['events'] as List? ?? [];
+    final events = List<Map<String, dynamic>>.from(data['events'] ?? []);
     _isEnded = data['ended'] == true;
+    _isPaused = data['paused'] == true;
     _isPrivate = data['isPrivate'] == true || data['private'] == true || data['type'] == 'private';
     _startedAt = (data['startedAt'] as Timestamp?)?.toDate();
     _sessionDate = (data['date'] as Timestamp?)?.toDate() ?? (data['startTime'] as Timestamp?)?.toDate();
@@ -91,6 +94,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
         _playerChipValues = chips;
         _playerCashoutResults = results;
         _isFinished = finishedFlags;
+        _events = events;
         _totalPot = pot;
       });
     }
@@ -137,7 +141,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   }
 
   Future<void> _addBuyInForPlayer(String playerId, String playerName) async {
-    if ((!_hasStarted && !_isPrivate) || _isEnded) return;
+    if ((!_hasStarted && !_isPrivate) || _isEnded || _isPaused) return;
 
     final amountController = TextEditingController();
     String type = 'buyin';
@@ -347,6 +351,14 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
         'result': resultType,
         'time': DateTime.now().toIso8601String(),
       }]),
+      'events': FieldValue.arrayUnion([{
+        'type': 'cashout',
+        'userId': playerId,
+        'playerName': playerName,
+        'amount': cashoutAmount,
+        'result': resultType,
+        'time': DateTime.now().toIso8601String(),
+      }]),
     });
 
     await _loadPlayerDetails();
@@ -362,6 +374,12 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     await FirebaseFirestore.instance.collection('sessions').doc(widget.sessionId).update({
       'players.$uid': FieldValue.delete(),
       'participants': FieldValue.arrayRemove([uid]),
+      'events': FieldValue.arrayUnion([{
+        'type': 'remove_player',
+        'userId': uid,
+        'playerName': name,
+        'time': DateTime.now().toIso8601String(),
+      }]),
     });
     await _loadPlayerDetails();
     if (mounted) {
@@ -369,6 +387,78 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
         SnackBar(content: Text('$name borttagen'), backgroundColor: Colors.orange),
       );
     }
+  }
+
+  Future<void> _addManualPlayer() async {
+    final controller = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (c) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A1A),
+        title: const Text('Lägg till spelare', style: TextStyle(color: Colors.white)),
+        content: TextField(
+          controller: controller,
+          style: const TextStyle(color: Colors.white),
+          decoration: const InputDecoration(hintText: 'Namn', hintStyle: TextStyle(color: Colors.white38)),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c), child: const Text('Avbryt')),
+          TextButton(
+            onPressed: () => Navigator.pop(c, controller.text.trim()),
+            child: const Text('Lägg till', style: TextStyle(color: Colors.cyan)),
+          ),
+        ],
+      ),
+    );
+    if (name == null || name.isEmpty) return;
+
+    final id = 'manual_${DateTime.now().millisecondsSinceEpoch}';
+    await FirebaseFirestore.instance.collection('sessions').doc(widget.sessionId).update({
+      'players.$id': true,
+      'manualPlayers': FieldValue.arrayUnion([{'id': id, 'name': name}]),
+      'participants': FieldValue.arrayUnion([id]),
+      'events': FieldValue.arrayUnion([{
+        'type': 'add_player',
+        'userId': id,
+        'playerName': name,
+        'time': DateTime.now().toIso8601String(),
+      }]),
+    });
+    await _loadPlayerDetails();
+  }
+
+  Future<void> _togglePause() async {
+    final newPaused = !_isPaused;
+    await FirebaseFirestore.instance.collection('sessions').doc(widget.sessionId).update({
+      'paused': newPaused,
+      'events': FieldValue.arrayUnion([{
+        'type': newPaused ? 'pause' : 'resume',
+        'time': DateTime.now().toIso8601String(),
+      }]),
+    });
+    await _loadPlayerDetails();
+  }
+
+  Future<void> _deleteSession() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A1A),
+        title: const Text('Radera session?', style: TextStyle(color: Colors.white)),
+        content: const Text('Detta tar bort sessionen för alla.', style: TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Avbryt')),
+          TextButton(
+            onPressed: () => Navigator.pop(c, true),
+            child: const Text('Radera', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    await FirebaseFirestore.instance.collection('sessions').doc(widget.sessionId).delete();
+    if (mounted) Navigator.pop(context);
   }
 
   Widget _cashOption(String label, Color color, bool selected, VoidCallback onTap) {
@@ -390,6 +480,10 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     await FirebaseFirestore.instance.collection('sessions').doc(widget.sessionId).update({
       'ended': true,
       'endedAt': FieldValue.serverTimestamp(),
+      'events': FieldValue.arrayUnion([{
+        'type': 'end',
+        'time': DateTime.now().toIso8601String(),
+      }]),
     });
     if (mounted) {
       Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => SummaryScreen(sessionId: widget.sessionId)));
@@ -407,20 +501,35 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
         backgroundColor: Colors.black,
         title: const Text('Session', style: TextStyle(color: Colors.white)),
         actions: [
-          if (isAdmin && !_isEnded)
+          if (isAdmin && !_isEnded) ...[
+            IconButton(
+              icon: Icon(_isPaused ? Icons.play_arrow : Icons.pause, color: Colors.amber),
+              tooltip: _isPaused ? 'Fortsätt' : 'Pausa',
+              onPressed: _togglePause,
+            ),
+            IconButton(
+              icon: const Icon(Icons.person_add, color: Colors.cyan),
+              tooltip: 'Lägg till spelare',
+              onPressed: _addManualPlayer,
+            ),
             IconButton(
               icon: const Icon(Icons.stop, color: Colors.red),
               tooltip: 'Avsluta session',
               onPressed: _endSession,
             ),
-          if (_isEnded)
             IconButton(
-              icon: const Icon(Icons.summarize, color: Colors.cyan),
-              tooltip: 'Sammanfattning',
-              onPressed: () {
-                Navigator.push(context, MaterialPageRoute(builder: (_) => SummaryScreen(sessionId: widget.sessionId)));
-              },
+              icon: const Icon(Icons.delete, color: Colors.redAccent),
+              tooltip: 'Radera session',
+              onPressed: _deleteSession,
             ),
+          ],
+          IconButton(
+            icon: const Icon(Icons.summarize, color: Colors.cyan),
+            tooltip: 'Sammanfattning',
+            onPressed: () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => SummaryScreen(sessionId: widget.sessionId)));
+            },
+          ),
         ],
       ),
       body: SingleChildScrollView(
@@ -438,6 +547,11 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                   style: const TextStyle(color: Colors.cyan, fontSize: 18, fontWeight: FontWeight.bold),
                 ),
               ),
+            if (_isPaused)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 12),
+                child: Text('PAUSAD', style: TextStyle(color: Colors.amber, fontSize: 16, fontWeight: FontWeight.bold)),
+              ),
             Center(
               child: PokerTableWidget(
                 playerCount: _playerIds.length,
@@ -445,9 +559,9 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                 playerPhotoUrls: _playerPhotoUrls,
                 playerChipValues: _playerChipValues,
                 playerCashoutResults: _playerCashoutResults,
-                isAdmin: isAdmin && started && !_isEnded,
+                isAdmin: isAdmin && started && !_isEnded && !_isPaused,
                 isEnded: _isEnded,
-                onPlayerTap: isAdmin && started && !_isEnded ? (playerId, playerName) {
+                onPlayerTap: isAdmin && started && !_isEnded && !_isPaused ? (playerId, playerName) {
                   final index = _playerNames.indexOf(playerName);
                   if (index >= 0 && index < _playerIds.length) {
                     _showPlayerOptions(_playerIds[index], playerName, index);
@@ -485,6 +599,31 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
               ),
             ),
             const SizedBox(height: 24),
+            if (_events.isNotEmpty) ...[
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text('Händelser', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+              ),
+              const SizedBox(height: 8),
+              ..._events.reversed.take(15).map((e) {
+                final type = e['type'] ?? '';
+                final name = e['playerName'] ?? '';
+                final amount = e['amount'];
+                String label = type;
+                if (type == 'buyin') label = 'Buy-in $name: ${amount?.toStringAsFixed(0) ?? ''} kr';
+                else if (type == 'rebuy') label = 'Rebuy $name: ${amount?.toStringAsFixed(0) ?? ''} kr';
+                else if (type == 'cashout') label = 'Cash out $name';
+                else if (type == 'add_player') label = 'Spelare tillagd: $name';
+                else if (type == 'remove_player') label = 'Spelare borttagen: $name';
+                else if (type == 'pause') label = 'Pausad';
+                else if (type == 'resume') label = 'Fortsatt';
+                else if (type == 'end') label = 'Session avslutad';
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Text(label, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                );
+              }),
+            ],
             if (!started && !_isEnded && !_isPrivate)
               Container(
                 width: double.infinity,
