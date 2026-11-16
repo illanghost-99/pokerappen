@@ -26,6 +26,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   bool _isPrivate = false;
   DateTime? _startedAt;
   DateTime? _sessionDate;
+  double _totalPot = 0;
 
   @override
   void initState() {
@@ -53,6 +54,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     final chips = <double>[];
     final results = <String?>[];
     final finishedFlags = <bool>[];
+    double pot = 0;
 
     for (final id in ids) {
       String name = 'Spelare';
@@ -74,6 +76,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
         if (e['userId'] == id) total += (e['amount'] as num?)?.toDouble() ?? 0;
       }
       chips.add(total);
+      pot += total;
 
       final co = cashouts.cast<Map>().firstWhere((c) => c['userId'] == id, orElse: () => {});
       results.add(co['result']);
@@ -88,6 +91,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
         _playerChipValues = chips;
         _playerCashoutResults = results;
         _isFinished = finishedFlags;
+        _totalPot = pot;
       });
     }
   }
@@ -406,7 +410,16 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
           if (isAdmin && !_isEnded)
             IconButton(
               icon: const Icon(Icons.stop, color: Colors.red),
+              tooltip: 'Avsluta session',
               onPressed: _endSession,
+            ),
+          if (_isEnded)
+            IconButton(
+              icon: const Icon(Icons.summarize, color: Colors.cyan),
+              tooltip: 'Sammanfattning',
+              onPressed: () {
+                Navigator.push(context, MaterialPageRoute(builder: (_) => SummaryScreen(sessionId: widget.sessionId)));
+              },
             ),
         ],
       ),
@@ -417,6 +430,14 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
             if (!_isPrivate && _sessionDate != null)
               CountdownWidget(target: _sessionDate!),
             if (!_isPrivate) const SizedBox(height: 16),
+            if (started && _totalPot > 0)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text(
+                  'Pott: ${_totalPot.toStringAsFixed(0)} kr',
+                  style: const TextStyle(color: Colors.cyan, fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ),
             Center(
               child: PokerTableWidget(
                 playerCount: _playerIds.length,
