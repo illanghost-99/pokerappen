@@ -7,7 +7,8 @@ import 'summary_screen.dart';
 
 class SessionDetailScreen extends StatefulWidget {
   final String sessionId;
-  const SessionDetailScreen({super.key, required this.sessionId});
+  final Map<String, dynamic>? data;
+  const SessionDetailScreen({super.key, required this.sessionId, this.data});
 
   @override
   State<SessionDetailScreen> createState() => _SessionDetailScreenState();
@@ -42,7 +43,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     _startedAt = (data['startedAt'] as Timestamp?)?.toDate();
     _hasStarted = _startedAt != null;
 
-    final ids = players.keys.toList();
+    final ids = players.keys.cast<String>().toList();
     final names = <String>[];
     final photos = <String?>[];
     final chips = <double>[];
@@ -389,7 +390,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isAdmin = true; // simplified for now
+    final isAdmin = true;
     final started = _hasStarted;
 
     return Scaffold(
@@ -410,7 +411,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
         child: Column(
           children: [
             if (started && _startedAt != null)
-              CountdownWidget(startTime: _startedAt!, isCountingUp: true),
+              CountdownWidget(target: _startedAt!),
             const SizedBox(height: 24),
             Center(
               child: PokerTableWidget(
