@@ -32,25 +32,28 @@ class PokerTableWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final count = playerCount.clamp(0, 10);
+    if (count == 0) {
+      return const SizedBox(height: 300, child: Center(child: Text('Inga spelare', style: TextStyle(color: Colors.white54))));
+    }
+
     final screenWidth = MediaQuery.of(context).size.width;
     final centerX = screenWidth / 2;
     const centerY = 250.0;
 
-    // Table dimensions
-    const double tableWidth = 320.0;
-    const double tableHeight = 190.0;
-    const double tableHalfW = tableWidth / 2;
-    const double tableHalfH = tableHeight / 2;
+    // Table half-sizes
+    const double tableHalfW = 160.0;
+    const double tableHalfH = 95.0;
 
-    // Avatar size scales slightly with player count
+    // Avatar size
     final double avatarRadius = count <= 6 ? 26.0 : (count <= 8 ? 22.0 : 18.0);
 
-    // Elliptical orbit – players sit just outside the table edge
-    final double radiusX = tableHalfW + avatarRadius + 14;
-    final double radiusY = tableHalfH + avatarRadius + 12;
+    // Perfect elliptical orbit – same for every player
+    final double radiusX = tableHalfW + avatarRadius + 16;
+    final double radiusY = tableHalfH + avatarRadius + 14;
 
-    // Amounts sit between table edge and players (inward from player position)
-    final double amountOffset = avatarRadius + 22;
+    // Amounts sit between table edge and avatar (inward along the same angle)
+    final double amountRadiusX = tableHalfW + 20;
+    final double amountRadiusY = tableHalfH + 16;
 
     return SizedBox(
       height: 520,
@@ -61,8 +64,8 @@ class PokerTableWidget extends StatelessWidget {
         children: [
           // Poker table (unchanged)
           Container(
-            width: tableWidth,
-            height: tableHeight,
+            width: tableHalfW * 2,
+            height: tableHalfH * 2,
             decoration: BoxDecoration(
               gradient: const RadialGradient(
                 colors: [Color(0xFF1E7A1E), Color(0xFF0F4A0F)],
@@ -97,19 +100,17 @@ class PokerTableWidget extends StatelessWidget {
             ),
           ),
 
-          // Players + amounts as single units, placed mathematically
+          // All seats placed with the same formula
           ...List.generate(count, (i) {
             final angle = (i / count) * 2 * math.pi - math.pi / 2;
             final cosA = math.cos(angle);
             final sinA = math.sin(angle);
 
-            // Player position on ellipse
             final playerX = radiusX * cosA;
             final playerY = radiusY * sinA;
 
-            // Amount position: offset inward toward table center along the same angle
-            final amountX = (radiusX - amountOffset) * cosA;
-            final amountY = (radiusY - amountOffset) * sinA;
+            final amountX = amountRadiusX * cosA;
+            final amountY = amountRadiusY * sinA;
 
             final name = i < playerNames.length ? playerNames[i] : 'Spelare ${i + 1}';
             final playerId = i < playerNames.length ? playerNames[i] : 'player_$i';
@@ -120,13 +121,13 @@ class PokerTableWidget extends StatelessWidget {
 
             return Stack(
               children: [
-                // Amount (between player and table)
+                // Amount – between player and table
                 Positioned(
                   left: centerX + amountX - 28,
                   top: centerY + amountY - 10,
                   child: _buildAmount(value, cashoutResult, finished),
                 ),
-                // Player (avatar + name)
+                // Player seat
                 Positioned(
                   left: centerX + playerX - avatarRadius,
                   top: centerY + playerY - avatarRadius - 6,
