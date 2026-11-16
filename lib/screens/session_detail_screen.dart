@@ -23,6 +23,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   List<bool> _isFinished = [];
   bool _isEnded = false;
   bool _hasStarted = false;
+  bool _isPrivate = false;
   DateTime? _startedAt;
   DateTime? _sessionDate;
 
@@ -41,9 +42,10 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     final cashouts = data['cashouts'] as List? ?? [];
     final events = data['events'] as List? ?? [];
     _isEnded = data['ended'] == true;
+    _isPrivate = data['isPrivate'] == true || data['private'] == true || data['type'] == 'private';
     _startedAt = (data['startedAt'] as Timestamp?)?.toDate();
     _sessionDate = (data['date'] as Timestamp?)?.toDate() ?? (data['startTime'] as Timestamp?)?.toDate();
-    _hasStarted = _startedAt != null;
+    _hasStarted = _startedAt != null || _isPrivate;
 
     final ids = players.keys.cast<String>().toList();
     final names = <String>[];
@@ -131,7 +133,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   }
 
   Future<void> _addBuyInForPlayer(String playerId, String playerName) async {
-    if (!_hasStarted || _isEnded) return;
+    if ((!_hasStarted && !_isPrivate) || _isEnded) return;
 
     final amountController = TextEditingController();
     String type = 'buyin';
@@ -393,7 +395,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final isAdmin = true;
-    final started = _hasStarted;
+    final started = _hasStarted || _isPrivate;
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -412,10 +414,9 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            // Always show countdown / date
-            if (_sessionDate != null)
+            if (!_isPrivate && _sessionDate != null)
               CountdownWidget(target: _sessionDate!),
-            const SizedBox(height: 16),
+            if (!_isPrivate) const SizedBox(height: 16),
             Center(
               child: PokerTableWidget(
                 playerCount: _playerIds.length,
@@ -463,7 +464,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
               ),
             ),
             const SizedBox(height: 24),
-            if (!started && !_isEnded)
+            if (!started && !_isEnded && !_isPrivate)
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
