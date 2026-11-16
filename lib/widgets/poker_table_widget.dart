@@ -36,13 +36,13 @@ class PokerTableWidget extends StatelessWidget {
     final centerX = screenWidth / 2;
     const centerY = 250.0;
 
-    // Dynamic radius and avatar size for symmetry and fit
-    final double baseRadius = count <= 6 ? 175.0 : (count <= 8 ? 185.0 : 195.0);
+    // Smaller radius so players sit around the table, not on top of it
+    final double baseRadius = count <= 6 ? 145.0 : (count <= 8 ? 155.0 : 162.0);
     final double avatarRadius = count <= 6 ? 26.0 : (count <= 8 ? 22.0 : 18.0);
-    final double amountRadius = baseRadius - 48;
+    final double amountRadius = baseRadius - 42;
 
     return SizedBox(
-      height: 520,
+      height: 500,
       width: double.infinity,
       child: Stack(
         clipBehavior: Clip.none,
@@ -86,7 +86,7 @@ class PokerTableWidget extends StatelessWidget {
             ),
           ),
 
-          // Amounts (symmetrically placed inward from each player)
+          // Amounts
           ...List.generate(count, (i) {
             final angle = (i / count) * 2 * math.pi - math.pi / 2;
             final amountX = amountRadius * math.cos(angle);
@@ -102,7 +102,7 @@ class PokerTableWidget extends StatelessWidget {
             );
           }),
 
-          // Players (perfectly even slots)
+          // Players
           ...List.generate(count, (i) {
             final angle = (i / count) * 2 * math.pi - math.pi / 2;
             final playerX = baseRadius * math.cos(angle);
@@ -114,7 +114,7 @@ class PokerTableWidget extends StatelessWidget {
 
             return Positioned(
               left: centerX + playerX - avatarRadius,
-              top: centerY + playerY - avatarRadius - 8,
+              top: centerY + playerY - avatarRadius - 6,
               child: GestureDetector(
                 onTap: () {
                   if (isEnded) {
