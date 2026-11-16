@@ -37,20 +37,22 @@ class PokerTableWidget extends StatelessWidget {
     }
 
     final screenWidth = MediaQuery.of(context).size.width;
-    final centerX = screenWidth / 2 - 12; // slight left shift for players only
+    final centerX = screenWidth / 2 - 12;
     const centerY = 250.0;
 
-    const double tableHalfW = 160.0;
-    const double tableHalfH = 95.0;
+    // Slightly smaller table so players fit comfortably around it
+    const double tableHalfW = 140.0;
+    const double tableHalfH = 82.0;
 
     final double avatarRadius = count <= 6 ? 26.0 : (count <= 8 ? 22.0 : 18.0);
 
-    final double radiusX = tableHalfW + avatarRadius + 16;
-    final double radiusY = tableHalfH + avatarRadius + 14;
+    // Players sit just outside the smaller table
+    final double radiusX = tableHalfW + avatarRadius + 18;
+    final double radiusY = tableHalfH + avatarRadius + 16;
 
-    // Amounts sit clearly in front of each player (closer to table)
-    final double amountRadiusX = tableHalfW + 22;
-    final double amountRadiusY = tableHalfH + 18;
+    // Amounts sit clearly between the table edge and the player
+    final double amountRadiusX = tableHalfW + 24;
+    final double amountRadiusY = tableHalfH + 20;
 
     return SizedBox(
       height: 520,
@@ -59,7 +61,7 @@ class PokerTableWidget extends StatelessWidget {
         clipBehavior: Clip.none,
         alignment: Alignment.center,
         children: [
-          // Table stays centered
+          // Smaller table
           Container(
             width: tableHalfW * 2,
             height: tableHalfH * 2,
@@ -69,17 +71,17 @@ class PokerTableWidget extends StatelessWidget {
                 center: Alignment.center,
                 radius: 0.85,
               ),
-              borderRadius: BorderRadius.circular(95),
-              border: Border.all(color: const Color(0xFF3D2B1F), width: 9),
+              borderRadius: BorderRadius.circular(82),
+              border: Border.all(color: const Color(0xFF3D2B1F), width: 8),
               boxShadow: [
                 BoxShadow(color: Colors.black.withOpacity(0.45), blurRadius: 18, offset: const Offset(0, 5)),
                 BoxShadow(color: Colors.green.withOpacity(0.15), blurRadius: 24, spreadRadius: 2),
               ],
             ),
             child: Container(
-              margin: const EdgeInsets.all(5),
+              margin: const EdgeInsets.all(4),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(82),
+                borderRadius: BorderRadius.circular(72),
                 border: Border.all(color: const Color(0xFF5C4033), width: 2),
               ),
               child: const Center(
@@ -87,7 +89,7 @@ class PokerTableWidget extends StatelessWidget {
                   'POKER',
                   style: TextStyle(
                     color: Colors.white70,
-                    fontSize: 15,
+                    fontSize: 14,
                     letterSpacing: 3,
                     fontWeight: FontWeight.bold,
                     shadows: [Shadow(color: Colors.black45, blurRadius: 2)],
@@ -117,11 +119,13 @@ class PokerTableWidget extends StatelessWidget {
 
             return Stack(
               children: [
+                // Amount – clearly in front of the player, not overlapping the avatar
                 Positioned(
                   left: centerX + amountX - 28,
                   top: centerY + amountY - 10,
                   child: _buildAmount(value, cashoutResult, finished),
                 ),
+                // Player
                 Positioned(
                   left: centerX + playerX - avatarRadius,
                   top: centerY + playerY - avatarRadius - 6,
