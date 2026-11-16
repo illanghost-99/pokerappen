@@ -36,14 +36,18 @@ class PokerTableWidget extends StatelessWidget {
     final centerX = screenWidth / 2;
     const centerY = 250.0;
 
-    // Push players further out so they sit cleanly outside the table
-    final double radiusX = count <= 6 ? 195.0 : (count <= 8 ? 205.0 : 215.0);
-    final double radiusY = count <= 6 ? 145.0 : (count <= 8 ? 155.0 : 162.0);
+    // Table half-sizes + small offset so avatars sit right at the edge
+    const double tableHalfW = 160.0;
+    const double tableHalfH = 95.0;
     final double avatarRadius = count <= 6 ? 26.0 : (count <= 8 ? 22.0 : 18.0);
 
-    // Amounts sit between table edge and players
-    final double amountRadiusX = 118.0;
-    final double amountRadiusY = 78.0;
+    // Perfect elliptical radius – same for all players, centered on table
+    final double radiusX = tableHalfW + avatarRadius + 8;
+    final double radiusY = tableHalfH + avatarRadius + 6;
+
+    // Amounts sit just inside the players, outside the table edge
+    final double amountRadiusX = tableHalfW + 18;
+    final double amountRadiusY = tableHalfH + 14;
 
     return SizedBox(
       height: 520,
@@ -90,7 +94,7 @@ class PokerTableWidget extends StatelessWidget {
             ),
           ),
 
-          // Amounts (closer to table, not on players)
+          // Amounts
           ...List.generate(count, (i) {
             final angle = (i / count) * 2 * math.pi - math.pi / 2;
             final amountX = amountRadiusX * math.cos(angle);
@@ -106,7 +110,7 @@ class PokerTableWidget extends StatelessWidget {
             );
           }),
 
-          // Players (further out)
+          // Players – perfectly even and centered
           ...List.generate(count, (i) {
             final angle = (i / count) * 2 * math.pi - math.pi / 2;
             final playerX = radiusX * math.cos(angle);
@@ -118,7 +122,7 @@ class PokerTableWidget extends StatelessWidget {
 
             return Positioned(
               left: centerX + playerX - avatarRadius,
-              top: centerY + playerY - avatarRadius - 8,
+              top: centerY + playerY - avatarRadius - 6,
               child: GestureDetector(
                 onTap: () {
                   if (isEnded) {
