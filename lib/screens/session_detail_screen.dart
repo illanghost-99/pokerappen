@@ -490,6 +490,24 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     }
   }
 
+  Widget _actionButton(IconData icon, Color color, String tooltip, VoidCallback onPressed) {
+    return Container(
+      margin: const EdgeInsets.only(left: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withOpacity(0.5)),
+      ),
+      child: IconButton(
+        icon: Icon(icon, color: color, size: 22),
+        tooltip: tooltip,
+        onPressed: onPressed,
+        padding: const EdgeInsets.all(8),
+        constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isAdmin = true;
@@ -499,37 +517,18 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
       backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: Colors.black,
-        title: const Text('Session', style: TextStyle(color: Colors.white)),
+        title: const Text('Session', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         actions: [
           if (isAdmin && !_isEnded) ...[
-            IconButton(
-              icon: Icon(_isPaused ? Icons.play_arrow : Icons.pause, color: Colors.amber),
-              tooltip: _isPaused ? 'Fortsätt' : 'Pausa',
-              onPressed: _togglePause,
-            ),
-            IconButton(
-              icon: const Icon(Icons.person_add, color: Colors.cyan),
-              tooltip: 'Lägg till spelare',
-              onPressed: _addManualPlayer,
-            ),
-            IconButton(
-              icon: const Icon(Icons.stop, color: Colors.red),
-              tooltip: 'Avsluta session',
-              onPressed: _endSession,
-            ),
-            IconButton(
-              icon: const Icon(Icons.delete, color: Colors.redAccent),
-              tooltip: 'Radera session',
-              onPressed: _deleteSession,
-            ),
+            _actionButton(_isPaused ? Icons.play_arrow : Icons.pause, Colors.amber, _isPaused ? 'Fortsätt' : 'Pausa', _togglePause),
+            _actionButton(Icons.person_add, Colors.cyan, 'Lägg till spelare', _addManualPlayer),
+            _actionButton(Icons.stop, Colors.red, 'Avsluta session', _endSession),
+            _actionButton(Icons.delete_outline, Colors.redAccent, 'Radera session', _deleteSession),
           ],
-          IconButton(
-            icon: const Icon(Icons.summarize, color: Colors.cyan),
-            tooltip: 'Sammanfattning',
-            onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => SummaryScreen(sessionId: widget.sessionId)));
-            },
-          ),
+          _actionButton(Icons.summarize, Colors.cyan, 'Sammanfattning', () {
+            Navigator.push(context, MaterialPageRoute(builder: (_) => SummaryScreen(sessionId: widget.sessionId)));
+          }),
+          const SizedBox(width: 8),
         ],
       ),
       body: SingleChildScrollView(
@@ -540,17 +539,30 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
               CountdownWidget(target: _sessionDate!),
             if (!_isPrivate) const SizedBox(height: 16),
             if (started && _totalPot > 0)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
+              Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(colors: [Colors.cyan.withOpacity(0.2), Colors.cyan.withOpacity(0.05)]),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.cyan.withOpacity(0.6), width: 1.5),
+                  boxShadow: [BoxShadow(color: Colors.cyan.withOpacity(0.25), blurRadius: 12)],
+                ),
                 child: Text(
-                  'Pott: ${_totalPot.toStringAsFixed(0)} kr',
-                  style: const TextStyle(color: Colors.cyan, fontSize: 18, fontWeight: FontWeight.bold),
+                  'POTT  ${_totalPot.toStringAsFixed(0)} kr',
+                  style: const TextStyle(color: Colors.cyan, fontSize: 20, fontWeight: FontWeight.bold, letterSpacing: 1.2),
                 ),
               ),
             if (_isPaused)
-              const Padding(
-                padding: EdgeInsets.only(bottom: 12),
-                child: Text('PAUSAD', style: TextStyle(color: Colors.amber, fontSize: 16, fontWeight: FontWeight.bold)),
+              Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.amber.withOpacity(0.6)),
+                ),
+                child: const Text('PAUSAD', style: TextStyle(color: Colors.amber, fontSize: 15, fontWeight: FontWeight.bold, letterSpacing: 2)),
               ),
             Center(
               child: PokerTableWidget(
@@ -598,31 +610,42 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                 isFinished: _isFinished,
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 28),
             if (_events.isNotEmpty) ...[
-              const Align(
-                alignment: Alignment.centerLeft,
-                child: Text('Händelser', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF111111),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.white12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('HÄNDELSER', style: TextStyle(color: Colors.cyan, fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+                    const SizedBox(height: 12),
+                    ..._events.reversed.take(15).map((e) {
+                      final type = e['type'] ?? '';
+                      final name = e['playerName'] ?? '';
+                      final amount = e['amount'];
+                      String label = type;
+                      if (type == 'buyin') label = 'Buy-in  $name  ·  ${amount?.toStringAsFixed(0) ?? ''} kr';
+                      else if (type == 'rebuy') label = 'Rebuy  $name  ·  ${amount?.toStringAsFixed(0) ?? ''} kr';
+                      else if (type == 'cashout') label = 'Cash out  $name';
+                      else if (type == 'add_player') label = 'Spelare tillagd  ·  $name';
+                      else if (type == 'remove_player') label = 'Spelare borttagen  ·  $name';
+                      else if (type == 'pause') label = 'Session pausad';
+                      else if (type == 'resume') label = 'Session fortsatt';
+                      else if (type == 'end') label = 'Session avslutad';
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 5),
+                        child: Text(label, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                      );
+                    }),
+                  ],
+                ),
               ),
-              const SizedBox(height: 8),
-              ..._events.reversed.take(15).map((e) {
-                final type = e['type'] ?? '';
-                final name = e['playerName'] ?? '';
-                final amount = e['amount'];
-                String label = type;
-                if (type == 'buyin') label = 'Buy-in $name: ${amount?.toStringAsFixed(0) ?? ''} kr';
-                else if (type == 'rebuy') label = 'Rebuy $name: ${amount?.toStringAsFixed(0) ?? ''} kr';
-                else if (type == 'cashout') label = 'Cash out $name';
-                else if (type == 'add_player') label = 'Spelare tillagd: $name';
-                else if (type == 'remove_player') label = 'Spelare borttagen: $name';
-                else if (type == 'pause') label = 'Pausad';
-                else if (type == 'resume') label = 'Fortsatt';
-                else if (type == 'end') label = 'Session avslutad';
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Text(label, style: const TextStyle(color: Colors.white70, fontSize: 13)),
-                );
-              }),
             ],
             if (!started && !_isEnded && !_isPrivate)
               Container(
