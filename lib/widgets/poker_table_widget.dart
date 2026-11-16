@@ -40,28 +40,27 @@ class PokerTableWidget extends StatelessWidget {
     final centerX = screenWidth / 2 - 12;
     const centerY = 250.0;
 
-    // Slightly smaller table so players fit comfortably around it
     const double tableHalfW = 140.0;
     const double tableHalfH = 82.0;
 
     final double avatarRadius = count <= 6 ? 26.0 : (count <= 8 ? 22.0 : 18.0);
 
-    // Players sit just outside the smaller table
-    final double radiusX = tableHalfW + avatarRadius + 18;
-    final double radiusY = tableHalfH + avatarRadius + 16;
+    // Players sit further out so they clear the table edge
+    final double radiusX = tableHalfW + avatarRadius + 28;
+    final double radiusY = tableHalfH + avatarRadius + 32;
 
-    // Amounts sit clearly between the table edge and the player
-    final double amountRadiusX = tableHalfW + 24;
-    final double amountRadiusY = tableHalfH + 20;
+    // Amounts sit clearly between the table edge and the player avatar
+    final double amountRadiusX = tableHalfW + 18;
+    final double amountRadiusY = tableHalfH + 14;
 
     return SizedBox(
-      height: 520,
+      height: 540,
       width: double.infinity,
       child: Stack(
         clipBehavior: Clip.none,
         alignment: Alignment.center,
         children: [
-          // Smaller table
+          // Table
           Container(
             width: tableHalfW * 2,
             height: tableHalfH * 2,
@@ -104,8 +103,11 @@ class PokerTableWidget extends StatelessWidget {
             final cosA = math.cos(angle);
             final sinA = math.sin(angle);
 
+            // Extra downward push for bottom players so they clear the table edge
+            final bottomNudge = sinA > 0.4 ? 12.0 : 0.0;
+
             final playerX = radiusX * cosA;
-            final playerY = radiusY * sinA;
+            final playerY = radiusY * sinA + bottomNudge;
 
             final amountX = amountRadiusX * cosA;
             final amountY = amountRadiusY * sinA;
@@ -119,13 +121,13 @@ class PokerTableWidget extends StatelessWidget {
 
             return Stack(
               children: [
-                // Amount – clearly in front of the player, not overlapping the avatar
+                // Amount – clearly in front of the player (closer to table)
                 Positioned(
                   left: centerX + amountX - 28,
                   top: centerY + amountY - 10,
                   child: _buildAmount(value, cashoutResult, finished),
                 ),
-                // Player
+                // Player – further out
                 Positioned(
                   left: centerX + playerX - avatarRadius,
                   top: centerY + playerY - avatarRadius - 6,
