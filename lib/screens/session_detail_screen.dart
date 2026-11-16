@@ -33,6 +33,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   double _totalPot = 0;
   Timer? _playTimer;
   Duration _playDuration = Duration.zero;
+  bool _timerRunning = false;
 
   @override
   void initState() {
@@ -47,12 +48,13 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   }
 
   void _startPlayTimer() {
+    if (_timerRunning) return;
+    _timerRunning = true;
     _playTimer?.cancel();
-    if (_startedAt == null) return;
     _playTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted && !_isPaused && !_isEnded) {
         setState(() {
-          _playDuration = DateTime.now().difference(_startedAt!);
+          _playDuration += const Duration(seconds: 1);
         });
       }
     });
@@ -109,6 +111,9 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
       finishedFlags.add(finished.contains(id));
     }
 
+    // Check if first buy-in/rebuy happened
+    final hasBuyIn = events.any((e) => e['type'] == 'buyin' || e['type'] == 'rebuy');
+
     if (mounted) {
       setState(() {
         _playerIds = ids;
@@ -128,8 +133,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
         });
       }
 
-      if (_hasStarted && _startedAt != null) {
-        _playDuration = DateTime.now().difference(_startedAt!);
+      if (hasBuyIn && !_timerRunning && !_isEnded) {
         _startPlayTimer();
       }
     }
@@ -551,10 +555,59 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
   }
 
+  Widget _eventRow(Map<String, dynamic> e) {
+    final type = e['type'] ?? '';
+    final name = e['playerName'] ?? '';
+    final amount = e['amount'];
+    IconData icon = Icons.circle;
+    Color color = Colors.white54;
+    String label = '';
+
+    if (type == 'buyin') {
+      icon = Icons.add_circle_outline;
+      color = Colors.cyan;
+      label = '$name  ·  ${amount?.toStringAsFixed(0) ?? ''} kr';
+    } else if (type == 'rebuy') {
+      icon = Icons.refresh;
+      color = Colors.cyan;
+      label = '$name  ·  ${amount?.toStringAsFixed(0) ?? ''} kr';
+    } else if (type == 'cashout') {
+      icon = Icons.flag;
+      color = Colors.green;
+      label = '$name klar';
+    } else {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 14)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isAdmin = true;
     final started = _hasStarted || _isPrivate;
+
+    final relevantEvents = _events.where((e) {
+      final t = e['type'];
+      return t == 'buyin' || t == 'rebuy' || t == 'cashout';
+    }).toList().reversed.toList();
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -602,18 +655,19 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                             style: const TextStyle(color: Colors.cyan, fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: 1),
                           ),
                         ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: Colors.white24),
+                      if (_timerRunning)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: Colors.white24),
+                          ),
+                          child: Text(
+                            _formatPlayTime(),
+                            style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold, letterSpacing: 1),
+                          ),
                         ),
-                        child: Text(
-                          _formatPlayTime(),
-                          style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold, letterSpacing: 1),
-                        ),
-                      ),
                     ],
                   ),
                   const SizedBox(height: 16),
@@ -676,7 +730,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                   ),
                 ),
                 const SizedBox(height: 28),
-                if (_events.isNotEmpty) ...[
+                if (relevantEvents.isNotEmpty) ...[
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
@@ -690,24 +744,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                       children: [
                         const Text('HÄNDELSER', style: TextStyle(color: Colors.cyan, fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
                         const SizedBox(height: 12),
-                        ..._events.reversed.take(15).map((e) {
-                          final type = e['type'] ?? '';
-                          final name = e['playerName'] ?? '';
-                          final amount = e['amount'];
-                          String label = type;
-                          if (type == 'buyin') label = 'Buy-in  $name  ·  ${amount?.toStringAsFixed(0) ?? ''} kr';
-                          else if (type == 'rebuy') label = 'Rebuy  $name  ·  ${amount?.toStringAsFixed(0) ?? ''} kr';
-                          else if (type == 'cashout') label = 'Cash out  $name';
-                          else if (type == 'add_player') label = 'Spelare tillagd  ·  $name';
-                          else if (type == 'remove_player') label = 'Spelare borttagen  ·  $name';
-                          else if (type == 'pause') label = 'Session pausad';
-                          else if (type == 'resume') label = 'Session fortsatt';
-                          else if (type == 'end') label = 'Session avslutad';
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 5),
-                            child: Text(label, style: const TextStyle(color: Colors.white70, fontSize: 13)),
-                          );
-                        }),
+                        ...relevantEvents.take(15).map(_eventRow),
                       ],
                     ),
                   ),
