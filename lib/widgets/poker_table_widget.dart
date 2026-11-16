@@ -81,18 +81,18 @@ class PokerTableWidget extends StatelessWidget {
             ),
           ),
 
-          // Amounts
+          // Amounts (closer to players for better symmetry)
           ...List.generate(count, (i) {
             final angle = (i / count) * 2 * math.pi - math.pi / 2;
-            final amountX = 100 * math.cos(angle);
-            final amountY = 62 * math.sin(angle);
+            final amountX = 118 * math.cos(angle);
+            final amountY = 74 * math.sin(angle);
             final value = i < playerChipValues.length ? playerChipValues[i] : 0.0;
             final cashoutResult = i < playerCashoutResults.length ? playerCashoutResults[i] : null;
             final finished = i < isFinished.length ? isFinished[i] : false;
 
             return Positioned(
-              left: centerX + amountX - 32,
-              top: centerY + amountY - 12,
+              left: centerX + amountX - 28,
+              top: centerY + amountY - 10,
               child: _buildAmount(value, cashoutResult, finished),
             );
           }),
@@ -100,8 +100,8 @@ class PokerTableWidget extends StatelessWidget {
           // Players (evenly spaced)
           ...List.generate(count, (i) {
             final angle = (i / count) * 2 * math.pi - math.pi / 2;
-            final playerX = 165 * math.cos(angle);
-            final playerY = 105 * math.sin(angle);
+            final playerX = 168 * math.cos(angle);
+            final playerY = 108 * math.sin(angle);
             final name = i < playerNames.length ? playerNames[i] : 'Spelare ${i + 1}';
             final playerId = i < playerNames.length ? playerNames[i] : 'player_$i';
             final photoUrl = i < playerPhotoUrls.length ? playerPhotoUrls[i] : null;
