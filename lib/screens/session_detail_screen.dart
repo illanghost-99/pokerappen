@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../widgets/poker_table_widget.dart';
 import '../widgets/countdown_widget.dart';
 import 'summary_screen.dart';
+import 'dart:async';
 
 class SessionDetailScreen extends StatefulWidget {
   final String sessionId;
@@ -26,14 +27,35 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   bool _hasStarted = false;
   bool _isPrivate = false;
   bool _isPaused = false;
+  bool _showStartAnim = false;
   DateTime? _startedAt;
   DateTime? _sessionDate;
   double _totalPot = 0;
+  Timer? _playTimer;
+  Duration _playDuration = Duration.zero;
 
   @override
   void initState() {
     super.initState();
     _loadPlayerDetails();
+  }
+
+  @override
+  void dispose() {
+    _playTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startPlayTimer() {
+    _playTimer?.cancel();
+    if (_startedAt == null) return;
+    _playTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted && !_isPaused && !_isEnded) {
+        setState(() {
+          _playDuration = DateTime.now().difference(_startedAt!);
+        });
+      }
+    });
   }
 
   Future<void> _loadPlayerDetails() async {
@@ -44,6 +66,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     final finished = List<String>.from(data['finishedPlayers'] ?? []);
     final cashouts = data['cashouts'] as List? ?? [];
     final events = List<Map<String, dynamic>>.from(data['events'] ?? []);
+    final wasStarted = _hasStarted;
     _isEnded = data['ended'] == true;
     _isPaused = data['paused'] == true;
     _isPrivate = data['isPrivate'] == true || data['private'] == true || data['type'] == 'private';
@@ -97,6 +120,18 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
         _events = events;
         _totalPot = pot;
       });
+
+      if (_hasStarted && !wasStarted && !_isPrivate) {
+        setState(() => _showStartAnim = true);
+        Future.delayed(const Duration(milliseconds: 1800), () {
+          if (mounted) setState(() => _showStartAnim = false);
+        });
+      }
+
+      if (_hasStarted && _startedAt != null) {
+        _playDuration = DateTime.now().difference(_startedAt!);
+        _startPlayTimer();
+      }
     }
   }
 
@@ -508,6 +543,14 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     );
   }
 
+  String _formatPlayTime() {
+    final h = _playDuration.inHours;
+    final m = _playDuration.inMinutes % 60;
+    final s = _playDuration.inSeconds % 60;
+    if (h > 0) return '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final isAdmin = true;
@@ -531,138 +574,191 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            if (!_isPrivate && _sessionDate != null)
-              CountdownWidget(target: _sessionDate!),
-            if (!_isPrivate) const SizedBox(height: 16),
-            if (started && _totalPot > 0)
-              Container(
-                margin: const EdgeInsets.only(bottom: 16),
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(colors: [Colors.cyan.withOpacity(0.2), Colors.cyan.withOpacity(0.05)]),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.cyan.withOpacity(0.6), width: 1.5),
-                  boxShadow: [BoxShadow(color: Colors.cyan.withOpacity(0.25), blurRadius: 12)],
+      body: Stack(
+        children: [
+          SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                if (!_hasStarted && !_isPrivate && _sessionDate != null)
+                  CountdownWidget(target: _sessionDate!),
+                if (!_hasStarted && !_isPrivate) const SizedBox(height: 16),
+                if (started) ...[
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      if (_totalPot > 0)
+                        Container(
+                          margin: const EdgeInsets.only(right: 12),
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(colors: [Colors.cyan.withOpacity(0.25), Colors.cyan.withOpacity(0.05)]),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: Colors.cyan.withOpacity(0.7), width: 1.5),
+                            boxShadow: [BoxShadow(color: Colors.cyan.withOpacity(0.3), blurRadius: 14)],
+                          ),
+                          child: Text(
+                            'POTT  ${_totalPot.toStringAsFixed(0)} kr',
+                            style: const TextStyle(color: Colors.cyan, fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: 1),
+                          ),
+                        ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.white24),
+                        ),
+                        child: Text(
+                          _formatPlayTime(),
+                          style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold, letterSpacing: 1),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                ],
+                if (_isPaused)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.amber.withOpacity(0.6)),
+                    ),
+                    child: const Text('PAUSAD', style: TextStyle(color: Colors.amber, fontSize: 15, fontWeight: FontWeight.bold, letterSpacing: 2)),
+                  ),
+                Center(
+                  child: PokerTableWidget(
+                    playerCount: _playerIds.length,
+                    playerNames: _playerNames,
+                    playerPhotoUrls: _playerPhotoUrls,
+                    playerChipValues: _playerChipValues,
+                    playerCashoutResults: _playerCashoutResults,
+                    isAdmin: isAdmin && started && !_isEnded && !_isPaused,
+                    isEnded: _isEnded,
+                    onPlayerTap: isAdmin && started && !_isEnded && !_isPaused ? (playerId, playerName) {
+                      final index = _playerNames.indexOf(playerName);
+                      if (index >= 0 && index < _playerIds.length) {
+                        _showPlayerOptions(_playerIds[index], playerName, index);
+                      }
+                    } : null,
+                    onContinue: isAdmin && started && !_isEnded ? (playerId, playerName) async {
+                      await FirebaseFirestore.instance.collection('sessions').doc(widget.sessionId).update({
+                        'finishedPlayers': FieldValue.arrayRemove([playerId]),
+                      });
+                      await _loadPlayerDetails();
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('$playerName fortsätter'), backgroundColor: Colors.cyan),
+                        );
+                      }
+                    } : null,
+                    onViewPhoto: (photoUrl, name) {
+                      if (photoUrl == null || photoUrl.isEmpty) return;
+                      showDialog(
+                        context: context,
+                        barrierColor: Colors.black54,
+                        builder: (c) => GestureDetector(
+                          onTap: () => Navigator.pop(c),
+                          child: Center(
+                            child: CircleAvatar(
+                              radius: 90,
+                              backgroundImage: NetworkImage(photoUrl),
+                              backgroundColor: Colors.grey.shade800,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                    isFinished: _isFinished,
+                  ),
                 ),
-                child: Text(
-                  'POTT  ${_totalPot.toStringAsFixed(0)} kr',
-                  style: const TextStyle(color: Colors.cyan, fontSize: 20, fontWeight: FontWeight.bold, letterSpacing: 1.2),
-                ),
-              ),
-            if (_isPaused)
-              Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.amber.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.amber.withOpacity(0.6)),
-                ),
-                child: const Text('PAUSAD', style: TextStyle(color: Colors.amber, fontSize: 15, fontWeight: FontWeight.bold, letterSpacing: 2)),
-              ),
+                const SizedBox(height: 28),
+                if (_events.isNotEmpty) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF111111),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.white12),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('HÄNDELSER', style: TextStyle(color: Colors.cyan, fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+                        const SizedBox(height: 12),
+                        ..._events.reversed.take(15).map((e) {
+                          final type = e['type'] ?? '';
+                          final name = e['playerName'] ?? '';
+                          final amount = e['amount'];
+                          String label = type;
+                          if (type == 'buyin') label = 'Buy-in  $name  ·  ${amount?.toStringAsFixed(0) ?? ''} kr';
+                          else if (type == 'rebuy') label = 'Rebuy  $name  ·  ${amount?.toStringAsFixed(0) ?? ''} kr';
+                          else if (type == 'cashout') label = 'Cash out  $name';
+                          else if (type == 'add_player') label = 'Spelare tillagd  ·  $name';
+                          else if (type == 'remove_player') label = 'Spelare borttagen  ·  $name';
+                          else if (type == 'pause') label = 'Session pausad';
+                          else if (type == 'resume') label = 'Session fortsatt';
+                          else if (type == 'end') label = 'Session avslutad';
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 5),
+                            child: Text(label, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                          );
+                        }),
+                      ],
+                    ),
+                  ),
+                ],
+                if (!started && !_isEnded && !_isPrivate)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1A1A1A),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Text(
+                      'Sessionen har inte börjat än. Buy-ins låses upp när tiden är inne.',
+                      style: TextStyle(color: Colors.white54),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          if (_showStartAnim)
             Center(
-              child: PokerTableWidget(
-                playerCount: _playerIds.length,
-                playerNames: _playerNames,
-                playerPhotoUrls: _playerPhotoUrls,
-                playerChipValues: _playerChipValues,
-                playerCashoutResults: _playerCashoutResults,
-                isAdmin: isAdmin && started && !_isEnded && !_isPaused,
-                isEnded: _isEnded,
-                onPlayerTap: isAdmin && started && !_isEnded && !_isPaused ? (playerId, playerName) {
-                  final index = _playerNames.indexOf(playerName);
-                  if (index >= 0 && index < _playerIds.length) {
-                    _showPlayerOptions(_playerIds[index], playerName, index);
-                  }
-                } : null,
-                onContinue: isAdmin && started && !_isEnded ? (playerId, playerName) async {
-                  await FirebaseFirestore.instance.collection('sessions').doc(widget.sessionId).update({
-                    'finishedPlayers': FieldValue.arrayRemove([playerId]),
-                  });
-                  await _loadPlayerDetails();
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('$playerName fortsätter'), backgroundColor: Colors.cyan),
-                    );
-                  }
-                } : null,
-                onViewPhoto: (photoUrl, name) {
-                  if (photoUrl == null || photoUrl.isEmpty) return;
-                  showDialog(
-                    context: context,
-                    barrierColor: Colors.black54,
-                    builder: (c) => GestureDetector(
-                      onTap: () => Navigator.pop(c),
-                      child: Center(
-                        child: CircleAvatar(
-                          radius: 90,
-                          backgroundImage: NetworkImage(photoUrl),
-                          backgroundColor: Colors.grey.shade800,
+              child: TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0.5, end: 1.0),
+                duration: const Duration(milliseconds: 600),
+                curve: Curves.easeOutBack,
+                builder: (context, scale, child) {
+                  return Transform.scale(
+                    scale: scale,
+                    child: Opacity(
+                      opacity: scale.clamp(0.0, 1.0),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 20),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.85),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: Colors.cyan, width: 2),
+                          boxShadow: [BoxShadow(color: Colors.cyan.withOpacity(0.5), blurRadius: 24)],
+                        ),
+                        child: const Text(
+                          'SPELET STARTAR',
+                          style: TextStyle(color: Colors.cyan, fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 2),
                         ),
                       ),
                     ),
                   );
                 },
-                isFinished: _isFinished,
               ),
             ),
-            const SizedBox(height: 28),
-            if (_events.isNotEmpty) ...[
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF111111),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.white12),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('HÄNDELSER', style: TextStyle(color: Colors.cyan, fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
-                    const SizedBox(height: 12),
-                    ..._events.reversed.take(15).map((e) {
-                      final type = e['type'] ?? '';
-                      final name = e['playerName'] ?? '';
-                      final amount = e['amount'];
-                      String label = type;
-                      if (type == 'buyin') label = 'Buy-in  $name  ·  ${amount?.toStringAsFixed(0) ?? ''} kr';
-                      else if (type == 'rebuy') label = 'Rebuy  $name  ·  ${amount?.toStringAsFixed(0) ?? ''} kr';
-                      else if (type == 'cashout') label = 'Cash out  $name';
-                      else if (type == 'add_player') label = 'Spelare tillagd  ·  $name';
-                      else if (type == 'remove_player') label = 'Spelare borttagen  ·  $name';
-                      else if (type == 'pause') label = 'Session pausad';
-                      else if (type == 'resume') label = 'Session fortsatt';
-                      else if (type == 'end') label = 'Session avslutad';
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 5),
-                        child: Text(label, style: const TextStyle(color: Colors.white70, fontSize: 13)),
-                      );
-                    }),
-                  ],
-                ),
-              ),
-            ],
-            if (!started && !_isEnded && !_isPrivate)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1A1A1A),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Text(
-                  'Sessionen har inte börjat än. Buy-ins låses upp när tiden är inne.',
-                  style: TextStyle(color: Colors.white54),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-          ],
-        ),
+        ],
       ),
     );
   }
