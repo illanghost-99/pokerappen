@@ -45,13 +45,13 @@ class PokerTableWidget extends StatelessWidget {
 
     final double avatarRadius = count <= 6 ? 26.0 : (count <= 8 ? 22.0 : 18.0);
 
-    // Players sit further out so they clear the table edge
-    final double radiusX = tableHalfW + avatarRadius + 28;
-    final double radiusY = tableHalfH + avatarRadius + 32;
+    // Players sit closer to the table
+    final double radiusX = tableHalfW + avatarRadius + 10;
+    final double radiusY = tableHalfH + avatarRadius + 14;
 
-    // Amounts sit clearly between the table edge and the player avatar
-    final double amountRadiusX = tableHalfW + 18;
-    final double amountRadiusY = tableHalfH + 14;
+    // Amounts sit on the table surface, in front of each player
+    final double amountRadiusX = tableHalfW - 22;
+    final double amountRadiusY = tableHalfH - 16;
 
     return SizedBox(
       height: 540,
@@ -103,8 +103,7 @@ class PokerTableWidget extends StatelessWidget {
             final cosA = math.cos(angle);
             final sinA = math.sin(angle);
 
-            // Extra downward push for bottom players so they clear the table edge
-            final bottomNudge = sinA > 0.4 ? 12.0 : 0.0;
+            final bottomNudge = sinA > 0.4 ? 8.0 : 0.0;
 
             final playerX = radiusX * cosA;
             final playerY = radiusY * sinA + bottomNudge;
@@ -121,13 +120,13 @@ class PokerTableWidget extends StatelessWidget {
 
             return Stack(
               children: [
-                // Amount – clearly in front of the player (closer to table)
+                // Amount on the table surface
                 Positioned(
                   left: centerX + amountX - 28,
                   top: centerY + amountY - 10,
                   child: _buildAmount(value, cashoutResult, finished),
                 ),
-                // Player – further out
+                // Player closer to table
                 Positioned(
                   left: centerX + playerX - avatarRadius,
                   top: centerY + playerY - avatarRadius - 6,
