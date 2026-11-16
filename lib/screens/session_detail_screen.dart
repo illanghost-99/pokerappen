@@ -24,6 +24,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   bool _isEnded = false;
   bool _hasStarted = false;
   DateTime? _startedAt;
+  DateTime? _sessionDate;
 
   @override
   void initState() {
@@ -41,6 +42,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     final events = data['events'] as List? ?? [];
     _isEnded = data['ended'] == true;
     _startedAt = (data['startedAt'] as Timestamp?)?.toDate();
+    _sessionDate = (data['date'] as Timestamp?)?.toDate() ?? (data['startTime'] as Timestamp?)?.toDate();
     _hasStarted = _startedAt != null;
 
     final ids = players.keys.cast<String>().toList();
@@ -410,9 +412,10 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            if (started && _startedAt != null)
-              CountdownWidget(target: _startedAt!),
-            const SizedBox(height: 24),
+            // Always show countdown / date
+            if (_sessionDate != null)
+              CountdownWidget(target: _sessionDate!),
+            const SizedBox(height: 16),
             Center(
               child: PokerTableWidget(
                 playerCount: _playerIds.length,
