@@ -57,18 +57,21 @@ class SummaryScreen extends StatelessWidget {
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [Colors.cyan.withOpacity(0.15), Colors.black],
+                    colors: [Colors.cyan.withOpacity(0.18), Colors.black],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.cyan.withOpacity(0.4)),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: Colors.cyan.withOpacity(0.45)),
+                  boxShadow: [
+                    BoxShadow(color: Colors.cyan.withOpacity(0.08), blurRadius: 16, spreadRadius: 1),
+                  ],
                 ),
                 child: Column(
                   children: [
-                    const Text('TOTAL POTT', style: TextStyle(color: Colors.white54, letterSpacing: 2, fontSize: 13)),
+                    const Text('TOTAL POTT', style: TextStyle(color: Colors.white54, letterSpacing: 2.5, fontSize: 13)),
                     const SizedBox(height: 4),
-                    Text('${total.toStringAsFixed(0)} SEK', style: const TextStyle(fontSize: 40, color: Colors.cyan, fontWeight: FontWeight.bold)),
+                    Text('${total.toStringAsFixed(0)} SEK', style: const TextStyle(fontSize: 42, color: Colors.cyan, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 20),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -112,7 +115,7 @@ class SummaryScreen extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: const Color(0xFF1A1A1A),
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.white.withOpacity(0.06)),
+                    border: Border.all(color: Colors.white.withOpacity(0.07)),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -155,32 +158,41 @@ class SummaryScreen extends StatelessWidget {
                 if (timeStr != null) {
                   final t = DateTime.tryParse(timeStr);
                   if (t != null) {
-                    timeDisplay = DateFormat('d MMM HH:mm').format(t);
+                    timeDisplay = DateFormat('d MMM  HH:mm').format(t);
                   }
                 }
 
                 return Container(
-                  margin: const EdgeInsets.only(bottom: 6),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   decoration: BoxDecoration(
                     color: const Color(0xFF111111),
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.cyan.withOpacity(0.12)),
                   ),
                   child: Row(
                     children: [
-                      Icon(m['type'] == 'rebuy' ? Icons.refresh : Icons.add_circle_outline, color: Colors.cyan, size: 20),
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.cyan.withOpacity(0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(m['type'] == 'rebuy' ? Icons.refresh : Icons.add_circle_outline, color: Colors.cyan, size: 18),
+                      ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('$type  ${m['amount']} SEK', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+                            Text('$type  ${m['amount']} SEK', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                            const SizedBox(height: 2),
                             Text(m['playerName'] ?? '', style: const TextStyle(color: Colors.white54, fontSize: 12)),
                           ],
                         ),
                       ),
                       if (timeDisplay.isNotEmpty)
-                        Text(timeDisplay, style: const TextStyle(color: Colors.white38, fontSize: 13)),
+                        Text(timeDisplay, style: const TextStyle(color: Colors.white38, fontSize: 12)),
                     ],
                   ),
                 );
