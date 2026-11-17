@@ -273,7 +273,6 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
       return;
     }
 
-    // Fetch real user data for friends
     final friendDocs = await Future.wait(
       friendIds.map((id) => FirebaseFirestore.instance.collection('users').doc(id).get()),
     );
@@ -877,6 +876,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                 Center(
                   child: PokerTableWidget(
                     playerCount: _playerIds.length,
+                    playerIds: _playerIds,
                     playerNames: _playerNames,
                     playerPhotoUrls: _playerPhotoUrls,
                     playerChipValues: _playerChipValues,
@@ -884,9 +884,9 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                     isAdmin: canControl && started && !_isEnded && !_isPaused,
                     isEnded: _isEnded,
                     onPlayerTap: canControl && started && !_isEnded && !_isPaused ? (playerId, playerName) {
-                      final index = _playerNames.indexOf(playerName);
-                      if (index >= 0 && index < _playerIds.length) {
-                        _showPlayerOptions(_playerIds[index], playerName, index);
+                      final index = _playerIds.indexOf(playerId);
+                      if (index >= 0) {
+                        _showPlayerOptions(playerId, playerName, index);
                       }
                     } : null,
                     onContinue: canControl && started && !_isEnded ? (playerId, playerName) async {
