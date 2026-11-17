@@ -3,7 +3,8 @@ import 'dart:async';
 
 class CountdownWidget extends StatefulWidget {
   final DateTime target;
-  const CountdownWidget({super.key, required this.target});
+  final VoidCallback? onFinished;
+  const CountdownWidget({super.key, required this.target, this.onFinished});
 
   @override
   State<CountdownWidget> createState() => _CountdownWidgetState();
@@ -12,6 +13,7 @@ class CountdownWidget extends StatefulWidget {
 class _CountdownWidgetState extends State<CountdownWidget> {
   late Timer _timer;
   Duration _remaining = Duration.zero;
+  bool _finishedCalled = false;
 
   @override
   void initState() {
@@ -26,6 +28,10 @@ class _CountdownWidgetState extends State<CountdownWidget> {
       setState(() {
         _remaining = diff.isNegative ? Duration.zero : diff;
       });
+      if (_remaining == Duration.zero && !_finishedCalled) {
+        _finishedCalled = true;
+        widget.onFinished?.call();
+      }
     }
   }
 
