@@ -54,6 +54,11 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   bool get _isOriginalAdmin => _myUid != null && _myUid == _originalAdminId;
   bool get _isController => _myUid != null && (_myUid == _originalAdminId || _myUid == _currentControllerId);
 
+  bool get _timeHasPassed {
+    if (_sessionDate == null) return false;
+    return DateTime.now().isAfter(_sessionDate!) || DateTime.now().isAtSameMomentAs(_sessionDate!);
+  }
+
   void _startPlayTimer() {
     if (_timerRunning) return;
     _timerRunning = true;
@@ -81,7 +86,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     _isPrivate = data['isPrivate'] == true || data['private'] == true || data['type'] == 'private';
     _startedAt = (data['startedAt'] as Timestamp?)?.toDate();
     _sessionDate = (data['date'] as Timestamp?)?.toDate() ?? (data['startTime'] as Timestamp?)?.toDate();
-    _hasStarted = _startedAt != null || _isPrivate;
+    _hasStarted = _startedAt != null || _isPrivate || _timeHasPassed;
     _originalAdminId = data['adminId'] ?? data['createdBy'] ?? data['ownerId'];
     _currentControllerId = data['controllerId'];
 
