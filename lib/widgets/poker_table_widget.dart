@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 class PokerTableWidget extends StatelessWidget {
   final int playerCount;
+  final List<String> playerIds;
   final List<String> playerNames;
   final List<String?> playerPhotoUrls;
   final List<bool> isFinished;
@@ -17,6 +18,7 @@ class PokerTableWidget extends StatelessWidget {
   const PokerTableWidget({
     super.key,
     required this.playerCount,
+    this.playerIds = const [],
     this.playerNames = const [],
     this.playerPhotoUrls = const [],
     this.isFinished = const [],
@@ -45,11 +47,9 @@ class PokerTableWidget extends StatelessWidget {
 
     final double avatarRadius = count <= 6 ? 26.0 : (count <= 8 ? 22.0 : 18.0);
 
-    // Players sit closer to the table
     final double radiusX = tableHalfW + avatarRadius + 10;
     final double radiusY = tableHalfH + avatarRadius + 14;
 
-    // Amounts sit on the table surface, in front of each player
     final double amountRadiusX = tableHalfW - 22;
     final double amountRadiusY = tableHalfH - 16;
 
@@ -60,7 +60,6 @@ class PokerTableWidget extends StatelessWidget {
         clipBehavior: Clip.none,
         alignment: Alignment.center,
         children: [
-          // Table
           Container(
             width: tableHalfW * 2,
             height: tableHalfH * 2,
@@ -112,7 +111,7 @@ class PokerTableWidget extends StatelessWidget {
             final amountY = amountRadiusY * sinA;
 
             final name = i < playerNames.length ? playerNames[i] : 'Spelare ${i + 1}';
-            final playerId = i < playerNames.length ? playerNames[i] : 'player_$i';
+            final playerId = i < playerIds.length ? playerIds[i] : (i < playerNames.length ? playerNames[i] : 'player_$i');
             final photoUrl = i < playerPhotoUrls.length ? playerPhotoUrls[i] : null;
             final finished = i < isFinished.length ? isFinished[i] : false;
             final value = i < playerChipValues.length ? playerChipValues[i] : 0.0;
@@ -120,13 +119,11 @@ class PokerTableWidget extends StatelessWidget {
 
             return Stack(
               children: [
-                // Amount on the table surface
                 Positioned(
                   left: centerX + amountX - 28,
                   top: centerY + amountY - 10,
                   child: _buildAmount(value, cashoutResult, finished),
                 ),
-                // Player closer to table
                 Positioned(
                   left: centerX + playerX - avatarRadius,
                   top: centerY + playerY - avatarRadius - 6,
