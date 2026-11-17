@@ -245,6 +245,112 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     }
   }
 
+  Future<void> _addPlayer() async {
+    if (_isPrivate) {
+      await _addManualPlayer();
+    } else {
+      await _inviteFriends();
+    }
+  }
+
+  Future<void> _inviteFriends() async {
+    if (_myUid == null) return;
+    final friendsSnap = await FirebaseFirestore.instance.collection('users').doc(_myUid).collection('friends').get();
+    final friends = friendsSnap.docs.where((d) => !_playerIds.contains(d.id)).toList();
+
+    if (friends.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Inga fler vänner att bjuda in')),
+        );
+      }
+      return;
+    }
+
+    final selected = await showModalBottomSheet<List<String>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF1A1A1A),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (c) {
+        final chosen = <String>{};
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Text('Bjud in vänner', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                  ),
+                  Flexible(
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: friends.length,
+                      itemBuilder: (_, i) {
+                        final f = friends[i];
+                        final data = f.data();
+                        final name = data['displayName'] ?? 'Vän';
+                        final photo = data['photoUrl'] as String?;
+                        final selected = chosen.contains(f.id);
+                        return ListTile(
+                          leading: CircleAvatar(
+                            backgroundImage: photo != null && photo.isNotEmpty ? NetworkImage(photo) : null,
+                            child: photo == null || photo.isEmpty ? Text(name[0]) : null,
+                          ),
+                          title: Text(name, style: const TextStyle(color: Colors.white)),
+                          trailing: Icon(selected ? Icons.check_circle : Icons.add_circle_outline, color: selected ? Colors.cyan : Colors.white54),
+                          onTap: () {
+                            setModalState(() {
+                              if (selected) chosen.remove(f.id); else chosen.add(f.id);
+                            });
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: chosen.isEmpty ? null : () => Navigator.pop(c, chosen.toList()),
+                        style: ElevatedButton.styleFrom(backgroundColor: Colors.cyan),
+                        child: const Text('Lägg till', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (selected == null || selected.isEmpty) return;
+
+    final updates = <String, dynamic>{};
+    for (final id in selected) {
+      updates['players.$id'] = true;
+    }
+    updates['participants'] = FieldValue.arrayUnion(selected);
+    updates['events'] = FieldValue.arrayUnion(selected.map((id) => {
+      'type': 'add_player',
+      'userId': id,
+      'time': DateTime.now().toIso8601String(),
+    }).toList());
+
+    await FirebaseFirestore.instance.collection('sessions').doc(widget.sessionId).update(updates);
+    await _loadPlayerDetails();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${selected.length} vänner tillagda'), backgroundColor: Colors.cyan),
+      );
+    }
+  }
+
   Future<void> _addBuyInForPlayer(String playerId, String playerName) async {
     if ((!_hasStarted && !_isPrivate) || _isEnded || _isPaused) return;
 
@@ -686,7 +792,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
           if (canControl && !_isEnded) ...[
             _actionButton(_isPaused ? Icons.play_arrow : Icons.pause, Colors.amber, _isPaused ? 'Fortsätt' : 'Pausa', _togglePause),
             if (_isOriginalAdmin)
-              _actionButton(Icons.person_add, Colors.cyan, 'Lägg till spelare', _addManualPlayer),
+              _actionButton(Icons.person_add, Colors.cyan, 'Lägg till spelare', _addPlayer),
             _actionButton(Icons.stop, Colors.red, 'Avsluta session', _endSession),
           ],
           if (_isOriginalAdmin && !_isEnded)
