@@ -102,7 +102,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
         name = m['name'] ?? 'Spelare';
       } else {
         final u = await FirebaseFirestore.instance.collection('users').doc(id).get();
-        name = u.data()?['displayName'] ?? 'Spelare';
+        name = u.data()?['username'] ?? u.data()?['displayName'] ?? 'Spelare';
         photo = u.data()?['photoUrl'];
       }
       names.add(name);
@@ -255,10 +255,16 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
 
   Future<void> _inviteFriends() async {
     if (_myUid == null) return;
-    final friendsSnap = await FirebaseFirestore.instance.collection('users').doc(_myUid).collection('friends').get();
-    final friends = friendsSnap.docs.where((d) => !_playerIds.contains(d.id)).toList();
 
-    if (friends.isEmpty) {
+    final friendsSnap = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(_myUid)
+        .collection('friends')
+        .get();
+
+    final friendIds = friendsSnap.docs.map((d) => d.id).where((id) => !_playerIds.contains(id)).toList();
+
+    if (friendIds.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Inga fler vänner att bjuda in')),
@@ -266,6 +272,13 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
       }
       return;
     }
+
+    // Fetch real user data for friends
+    final friendDocs = await Future.wait(
+      friendIds.map((id) => FirebaseFirestore.instance.collection('users').doc(id).get()),
+    );
+
+    final friends = friendDocs.where((d) => d.exists).toList();
 
     final selected = await showModalBottomSheet<List<String>>(
       context: context,
@@ -290,16 +303,16 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                       itemCount: friends.length,
                       itemBuilder: (_, i) {
                         final f = friends[i];
-                        final data = f.data();
-                        final name = data['displayName'] ?? 'Vän';
+                        final data = f.data() ?? {};
+                        final name = data['username'] ?? data['displayName'] ?? 'Vän';
                         final photo = data['photoUrl'] as String?;
                         final selected = chosen.contains(f.id);
                         return ListTile(
                           leading: CircleAvatar(
                             backgroundImage: photo != null && photo.isNotEmpty ? NetworkImage(photo) : null,
-                            child: photo == null || photo.isEmpty ? Text(name[0]) : null,
+                            child: photo == null || photo.isEmpty ? Text(name[0].toUpperCase()) : null,
                           ),
-                          title: Text(name, style: const TextStyle(color: Colors.white)),
+                          title: Text(name.toString(), style: const TextStyle(color: Colors.white)),
                           trailing: Icon(selected ? Icons.check_circle : Icons.add_circle_outline, color: selected ? Colors.cyan : Colors.white54),
                           onTap: () {
                             setModalState(() {
