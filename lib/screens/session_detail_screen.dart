@@ -34,10 +34,14 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   Timer? _playTimer;
   Duration _playDuration = Duration.zero;
   bool _timerRunning = false;
+  String? _originalAdminId;
+  String? _currentControllerId;
+  String? _myUid;
 
   @override
   void initState() {
     super.initState();
+    _myUid = FirebaseAuth.instance.currentUser?.uid;
     _loadPlayerDetails();
   }
 
@@ -46,6 +50,9 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     _playTimer?.cancel();
     super.dispose();
   }
+
+  bool get _isOriginalAdmin => _myUid != null && _myUid == _originalAdminId;
+  bool get _isController => _myUid != null && (_myUid == _originalAdminId || _myUid == _currentControllerId);
 
   void _startPlayTimer() {
     if (_timerRunning) return;
@@ -75,6 +82,8 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     _startedAt = (data['startedAt'] as Timestamp?)?.toDate();
     _sessionDate = (data['date'] as Timestamp?)?.toDate() ?? (data['startTime'] as Timestamp?)?.toDate();
     _hasStarted = _startedAt != null || _isPrivate;
+    _originalAdminId = data['adminId'] ?? data['createdBy'] ?? data['ownerId'];
+    _currentControllerId = data['controllerId'];
 
     final ids = players.keys.cast<String>().toList();
     final names = <String>[];
@@ -111,7 +120,6 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
       finishedFlags.add(finished.contains(id));
     }
 
-    // Check if first buy-in/rebuy happened
     final hasBuyIn = events.any((e) => e['type'] == 'buyin' || e['type'] == 'rebuy');
 
     if (mounted) {
@@ -165,18 +173,76 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                 _cashOutPlayer(playerId, playerName);
               },
             ),
+            if (_isOriginalAdmin)
+              ListTile(
+                leading: const Icon(Icons.person_remove, color: Colors.orange),
+                title: const Text('Ta bort spelare', style: TextStyle(color: Colors.white)),
+                onTap: () {
+                  Navigator.pop(c);
+                  _removePlayer(playerId, playerName);
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _transferControl() async {
+    if (!_isOriginalAdmin) return;
+    final options = <String>[];
+    final names = <String>[];
+    for (int i = 0; i < _playerIds.length; i++) {
+      if (_playerIds[i] != _originalAdminId && !_playerIds[i].startsWith('manual_')) {
+        options.add(_playerIds[i]);
+        names.add(_playerNames[i]);
+      }
+    }
+    if (options.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Inga andra spelare att ge kontroll till')),
+        );
+      }
+      return;
+    }
+
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: const Color(0xFF1A1A1A),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (c) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text('Ge kontroll till', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+            ),
+            ...List.generate(options.length, (i) => ListTile(
+              title: Text(names[i], style: const TextStyle(color: Colors.white)),
+              onTap: () => Navigator.pop(c, options[i]),
+            )),
             ListTile(
-              leading: const Icon(Icons.person_remove, color: Colors.orange),
-              title: const Text('Ta bort spelare', style: TextStyle(color: Colors.white)),
-              onTap: () {
-                Navigator.pop(c);
-                _removePlayer(playerId, playerName);
-              },
+              title: const Text('Ta tillbaka kontroll', style: TextStyle(color: Colors.cyan)),
+              onTap: () => Navigator.pop(c, 'revoke'),
             ),
           ],
         ),
       ),
     );
+
+    if (selected == null) return;
+    final newController = selected == 'revoke' ? null : selected;
+    await FirebaseFirestore.instance.collection('sessions').doc(widget.sessionId).update({
+      'controllerId': newController,
+    });
+    await _loadPlayerDetails();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(newController == null ? 'Kontroll tillbakatagen' : 'Kontroll överförd'), backgroundColor: Colors.cyan),
+      );
+    }
   }
 
   Future<void> _addBuyInForPlayer(String playerId, String playerName) async {
@@ -410,6 +476,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   }
 
   Future<void> _removePlayer(String uid, String name) async {
+    if (!_isOriginalAdmin) return;
     await FirebaseFirestore.instance.collection('sessions').doc(widget.sessionId).update({
       'players.$uid': FieldValue.delete(),
       'participants': FieldValue.arrayRemove([uid]),
@@ -479,6 +546,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   }
 
   Future<void> _deleteSession() async {
+    if (!_isOriginalAdmin) return;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
@@ -601,8 +669,8 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isAdmin = true;
     final started = _hasStarted || _isPrivate;
+    final canControl = _isController;
 
     final relevantEvents = _events.where((e) {
       final t = e['type'];
@@ -615,12 +683,16 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
         backgroundColor: Colors.black,
         title: const Text('Session', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         actions: [
-          if (isAdmin && !_isEnded) ...[
+          if (canControl && !_isEnded) ...[
             _actionButton(_isPaused ? Icons.play_arrow : Icons.pause, Colors.amber, _isPaused ? 'Fortsätt' : 'Pausa', _togglePause),
-            _actionButton(Icons.person_add, Colors.cyan, 'Lägg till spelare', _addManualPlayer),
+            if (_isOriginalAdmin)
+              _actionButton(Icons.person_add, Colors.cyan, 'Lägg till spelare', _addManualPlayer),
             _actionButton(Icons.stop, Colors.red, 'Avsluta session', _endSession),
-            _actionButton(Icons.delete_outline, Colors.redAccent, 'Radera session', _deleteSession),
           ],
+          if (_isOriginalAdmin && !_isEnded)
+            _actionButton(Icons.delete_outline, Colors.redAccent, 'Radera session', _deleteSession),
+          if (_isOriginalAdmin && !_isEnded)
+            _actionButton(Icons.swap_horiz, Colors.purpleAccent, 'Ge kontroll', _transferControl),
           _actionButton(Icons.summarize, Colors.cyan, 'Sammanfattning', () {
             Navigator.push(context, MaterialPageRoute(builder: (_) => SummaryScreen(sessionId: widget.sessionId)));
           }),
@@ -690,15 +762,15 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                     playerPhotoUrls: _playerPhotoUrls,
                     playerChipValues: _playerChipValues,
                     playerCashoutResults: _playerCashoutResults,
-                    isAdmin: isAdmin && started && !_isEnded && !_isPaused,
+                    isAdmin: canControl && started && !_isEnded && !_isPaused,
                     isEnded: _isEnded,
-                    onPlayerTap: isAdmin && started && !_isEnded && !_isPaused ? (playerId, playerName) {
+                    onPlayerTap: canControl && started && !_isEnded && !_isPaused ? (playerId, playerName) {
                       final index = _playerNames.indexOf(playerName);
                       if (index >= 0 && index < _playerIds.length) {
                         _showPlayerOptions(_playerIds[index], playerName, index);
                       }
                     } : null,
-                    onContinue: isAdmin && started && !_isEnded ? (playerId, playerName) async {
+                    onContinue: canControl && started && !_isEnded ? (playerId, playerName) async {
                       await FirebaseFirestore.instance.collection('sessions').doc(widget.sessionId).update({
                         'finishedPlayers': FieldValue.arrayRemove([playerId]),
                       });
