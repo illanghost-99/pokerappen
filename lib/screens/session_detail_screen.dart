@@ -37,6 +37,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   String? _originalAdminId;
   String? _currentControllerId;
   String? _myUid;
+  bool _startAnimShown = false;
 
   @override
   void initState() {
@@ -57,6 +58,15 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   bool get _timeHasPassed {
     if (_sessionDate == null) return false;
     return DateTime.now().isAfter(_sessionDate!) || DateTime.now().isAtSameMomentAs(_sessionDate!);
+  }
+
+  void _triggerStartAnim() {
+    if (_startAnimShown || _isPrivate || _isEnded) return;
+    _startAnimShown = true;
+    setState(() => _showStartAnim = true);
+    Future.delayed(const Duration(milliseconds: 1800), () {
+      if (mounted) setState(() => _showStartAnim = false);
+    });
   }
 
   void _startPlayTimer() {
@@ -140,15 +150,19 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
       });
 
       if (_hasStarted && !wasStarted && !_isPrivate) {
-        setState(() => _showStartAnim = true);
-        Future.delayed(const Duration(milliseconds: 1800), () {
-          if (mounted) setState(() => _showStartAnim = false);
-        });
+        _triggerStartAnim();
       }
 
       if (hasBuyIn && !_timerRunning && !_isEnded) {
         _startPlayTimer();
       }
+    }
+  }
+
+  void _onCountdownFinished() {
+    if (!_hasStarted && !_isPrivate) {
+      setState(() => _hasStarted = true);
+      _triggerStartAnim();
     }
   }
 
@@ -829,7 +843,10 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
             child: Column(
               children: [
                 if (!_hasStarted && !_isPrivate && _sessionDate != null)
-                  CountdownWidget(target: _sessionDate!),
+                  CountdownWidget(
+                    target: _sessionDate!,
+                    onFinished: _onCountdownFinished,
+                  ),
                 if (!_hasStarted && !_isPrivate) const SizedBox(height: 16),
                 if (started) ...[
                   Row(
