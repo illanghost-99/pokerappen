@@ -123,16 +123,36 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
       names.add(name);
       photos.add(photo);
 
-      double total = 0;
+      double totalBuyIns = 0;
       for (final e in events) {
-        if (e['userId'] == id) total += (e['amount'] as num?)?.toDouble() ?? 0;
+        if (e['userId'] == id && (e['type'] == 'buyin' || e['type'] == 'rebuy')) {
+          totalBuyIns += (e['amount'] as num?)?.toDouble() ?? 0;
+        }
       }
-      chips.add(total);
-      pot += total;
+
+      final isPlayerFinished = finished.contains(id);
+      finishedFlags.add(isPlayerFinished);
 
       final co = cashouts.cast<Map>().firstWhere((c) => c['userId'] == id, orElse: () => {});
-      results.add(co['result']);
-      finishedFlags.add(finished.contains(id));
+      String? resultType;
+      double displayValue = totalBuyIns;
+
+      if (isPlayerFinished && co.isNotEmpty) {
+        final cashoutAmount = (co['cashoutAmount'] as num?)?.toDouble() ?? 0;
+        final profit = cashoutAmount - totalBuyIns;
+        displayValue = profit;
+        if (profit > 0) {
+          resultType = 'plus';
+        } else if (profit < 0) {
+          resultType = 'minus';
+        } else {
+          resultType = 'even';
+        }
+      }
+
+      chips.add(displayValue);
+      results.add(resultType);
+      pot += totalBuyIns;
     }
 
     final hasBuyIn = events.any((e) => e['type'] == 'buyin' || e['type'] == 'rebuy');
@@ -573,14 +593,12 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     final events = sessionDoc.data()?['events'] as List? ?? [];
     double totalBuyIns = 0;
     for (final e in events) {
-      if (e['userId'] == playerId) {
+      if (e['userId'] == playerId && (e['type'] == 'buyin' || e['type'] == 'rebuy')) {
         totalBuyIns += (e['amount'] as num?)?.toDouble() ?? 0;
       }
     }
 
-    double profit = 0;
-    if (resultType == 'plus') profit = cashoutAmount - totalBuyIns;
-    else if (resultType == 'minus') profit = -cashoutAmount;
+    double profit = cashoutAmount - totalBuyIns;
 
     await FirebaseFirestore.instance.collection('sessions').doc(widget.sessionId).update({
       'finishedPlayers': FieldValue.arrayUnion([playerId]),
@@ -590,7 +608,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
         'cashoutAmount': cashoutAmount,
         'totalBuyIns': totalBuyIns,
         'profit': profit,
-        'result': resultType,
+        'result': profit > 0 ? 'plus' : (profit < 0 ? 'minus' : 'even'),
         'time': DateTime.now().toIso8601String(),
       }]),
       'events': FieldValue.arrayUnion([{
@@ -598,7 +616,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
         'userId': playerId,
         'playerName': playerName,
         'amount': cashoutAmount,
-        'result': resultType,
+        'result': profit > 0 ? 'plus' : (profit < 0 ? 'minus' : 'even'),
         'time': DateTime.now().toIso8601String(),
       }]),
     });
